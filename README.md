@@ -1,3 +1,4 @@
+[![Build Status](https://travis-ci.org/PaccMann/paccmann_predictor.svg?branch=master)](https://travis-ci.org/PaccMann/paccmann_predictor)
 # paccmann_predictor
 
 PyTorch implementation of PaccMann.
