@@ -71,7 +71,7 @@ optional arguments:
   -h, --help            show this help message and exit
 ```
 
-`params_path` could point to [examples/example_params.json](examples/example_params.json), examples for other files can be downloaded from [here](https://ibm.box.com/v/paccmann-pytoda-data).
+`params_filepath` could point to [examples/example_params.json](examples/example_params.json), examples for other files can be downloaded from [here](https://ibm.box.com/v/paccmann-pytoda-data).
 
 ## References
 
