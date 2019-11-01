@@ -1,0 +1,12 @@
+dist: trusty
+
+services:
+  - docker
+
+before_script:
+  - docker pull drugilsberg/rdkit-ubuntu:latest
+  - docker build -f .travis/Dockerfile -t predictor .
+
+script:
+  - docker run -it predictor python3 -c "import paccmann_predictor"
+  - docker run -it predictor python3 examples/train_paccmann.py -h
