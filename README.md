@@ -78,7 +78,7 @@ optional arguments:
 If you use `paccmann_predictor` in your projects, please cite the following:
 
 ```bib
-@article{doi:10.1021/acs.molpharmaceut.9b00520,
+@article{manica2019toward,
 author = {Manica, Matteo and Oskooei, Ali and Born, Jannis and Subramanian, Vigneshwari and Saez-Rodriguez, Julio and Rodriguez Martinez, Maria},
 title = {Toward Explainable Anticancer Compound Sensitivity Prediction via Multimodal Attention-Based Convolutional Encoders},
 journal = {Molecular Pharmaceutics},
