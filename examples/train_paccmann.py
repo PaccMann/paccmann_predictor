@@ -8,12 +8,14 @@ import pickle
 import sys
 from time import time
 import numpy as np
+# The logger imports tensorflow which may need to be imported before torch
+# (importing tensorflow after torch causes problems dependent on the versions)
+from paccmann_predictor.utils.logger import Logger
 import torch
 from pytoda.datasets import DrugSensitivityDataset
 from pytoda.smiles.smiles_language import SMILESLanguage
 from paccmann_predictor.models import MODEL_FACTORY
 from paccmann_predictor.utils.hyperparams import OPTIMIZER_FACTORY
-from paccmann_predictor.utils.logger import Logger
 from paccmann_predictor.utils.loss_functions import pearsonr
 from paccmann_predictor.utils.utils import get_device
 
