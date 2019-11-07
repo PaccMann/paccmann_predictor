@@ -1,14 +1,12 @@
 dist: trusty
 services:
-- docker
+  - docker
 before_script:
-- docker pull drugilsberg/rdkit-ubuntu:latest
-- docker build -f .travis/Dockerfile -t predictor .
+  - docker pull drugilsberg/rdkit-ubuntu:latest
+  - docker build -f .travis/Dockerfile -t predictor .
 script:
-- docker run -it predictor python3 -c "import paccmann_predictor"
-- docker run -it predictor python3 examples/train_paccmann.py -h
+  - docker run -it predictor python3 -c "import paccmann_predictor"
+  - docker run -it predictor python3 examples/train_paccmann.py -h
 notifications:
   slack:
-    secure: YnxwDvXXN2UCoTWG+dgfvOMjrgCt9Gh2D9Ll1Gv3eNHu9wT1YRqM3WP8yW8LVccmTdu1pW/aRPiwF9K5/bBl5dCHNOj//dNWxXCixrrJAPkyZOSgVHERl/NQuiJDpnQE/kdMXqhg/SV0fuv7sDasNsg2APjw4DlrfJOaJCVdQzfQ9DQbu3lf3ANSI5aaJX5gcqpeTIhSWoEdjzX3uAia6AwSEuBr5jKl4gpFNmAwFgIaIAV8rL1KZSPHn9ajmldxxOfOI1tdgQEXy/kd2iadfqjzy/MSRjIgOqCAPKdjAa925sor/SrsHEBkTSLAYw3eVROftwq4grVGDm0Gltanld6NYz4Lt2wyCPxe0vaCVsSug4owQjvzh5HeWhWU+HzZBXLiHPygQ7YN0cpVKNzVkMgJsGEzIzcPS5UyyO2E2nQ4xfVsJHiiox6fydHmO0zBjwTshtaDFvLpgQ1G/+yReelFrqIKTsnebA9yPIcw63c6Hc28T+mUnWAXA0ekkB2E8IyroFTI8lAfKjwz5sLzMFwugkPrYfO07hzCGwsX47fGUEgu6hTwVmqcx0Eqv7OUmELPc1cI/ECSB90BMKqX/yrT26l5lWcJ8VfklgmCLnhHATfff5mXCAjgkHBBplo+VGz/QXcJ+LeTwaplyi66S5yWINPXzfyw/N9tcikXzAU=
-    on_success: always
-    on_failure: always
+    secure: BqdNoYQ+BgYeTX38T65EpNnZLLUmJAyUDEGRnR4RVQKhNQjIER3sVKc7BuCChRqV3GogYqsM4IA5muwMgSxzxkKSc7qlfMeBc4avqBHQ22LLEHTtleqduVFOYjlauP894p2NVUbwyNKIDiM25AfM6nwMBk5vhk+K6WfgBGkwOPRVeXS5ONcWrB+eUm8Rbccjs4QXpjHVFj5c4xMTd9fIoXKmCL/wJctY2j1/g3Zit5+ADmzh3uboXY0NQciCXtdLFX7ofSJO3np+UlByGxmP0lqKiVg72Y93noPzdFJzXYtOsri69U4syU3Hk4BkMJe/NExtX6Y8UZUQ79AeV4u0G/PBj4q4JKyALHQxCa+xs17TuRw+AzAVLjxshMYIQPOSfLVxltgk2yBOalg+rOmSVw74DcRgchGEHdg/VIimh2asjx35As/D/IfsJSQH7H3pBd4n/V5N211+IoFjqFFWkw6Sh9NgfICx+VncyVvGmZwSzgBWjvlzbHF/DqU7kkTkz3HBlcGOJ4kE/uwp8B1CHVaQS9HBbaExyj7aQebbWSiUD9RhKLVc6jZpQYjBocughvtdxYkfcOZhofi7NNj+Mhr9sD72L+PIjR01uUoUiQmt1q24GfCduc1pooqjq9+tU6q8AhzSwhhvnKmMTJ83AfKwBa9VO2KvNSquiA1lTtQ=
