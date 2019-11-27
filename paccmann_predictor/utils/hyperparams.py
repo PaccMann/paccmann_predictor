@@ -3,16 +3,13 @@ import torch.optim as optim
 import torch.nn as nn
 
 from .loss_functions import (
-    mse_cc_loss, correlation_coefficient_loss,
+    mse_cc_loss,
+    correlation_coefficient_loss,
 )
-
 
 # LSTM(10, 20, 2) -> input has 10 features, 20 hidden size and 2 layers.
 # NOTE: Make sure to set batch_first=True. Optionally set bidirectional=True
-RNN_CELL_FACTORY = {
-    'lstm': nn.LSTM,
-    'gru': nn.GRU
-}
+RNN_CELL_FACTORY = {'lstm': nn.LSTM, 'gru': nn.GRU}
 
 LOSS_FN_FACTORY = {
     'mse': nn.MSELoss(),

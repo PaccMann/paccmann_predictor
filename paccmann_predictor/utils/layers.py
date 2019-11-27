@@ -22,12 +22,17 @@ from .utils import Squeeze, Unsqueeze, get_device
 DEVICE = get_device()
 
 
-def dense_layer(input_size, hidden_size, act_fn, dropout):
+def dense_layer(
+    input_size, hidden_size, act_fn=nn.ReLU(), batch_norm=False, dropout=0.
+):
     return nn.Sequential(
         OrderedDict(
             [
                 ('projection', nn.Linear(input_size, hidden_size)),
-                ('batch_norm', nn.BatchNorm1d(hidden_size)),
+                (
+                    'batch_norm', nn.BatchNorm1d(hidden_size)
+                    if batch_norm else nn.Identity()
+                ),
                 ('act_fn', act_fn),
                 ('dropout', nn.Dropout(p=dropout)),
             ]
@@ -53,13 +58,20 @@ def dense_attention_layer(number_of_features):
     )
 
 
-def convolutional_layer(num_kernel, kernel_size, act_fn, dropout):
+def convolutional_layer(
+    num_kernel,
+    kernel_size,
+    act_fn=nn.ReLU(),
+    batch_norm=False,
+    dropout=0.,
+):
     """Convolutional layer.
 
     Args:
         num_kernel (int): Number of convolution kernels.
         kernel_size (tuple[int, int]): Size of the convolution kernels.
         act_fn (callable): Functional of the nonlinear activation.
+        batch_norm (bool): whether batch normalization is applied.
         dropout (float): Probability for each input value to be 0.
 
     Returns:
@@ -80,7 +92,10 @@ def convolutional_layer(num_kernel, kernel_size, act_fn, dropout):
                 ('squeeze', Squeeze()),
                 ('act_fn', act_fn),
                 ('dropout', nn.Dropout(p=dropout)),
-                ('batch_norm', nn.BatchNorm1d(num_kernel))
+                (
+                    'batch_norm',
+                    nn.BatchNorm1d(num_kernel) if batch_norm else nn.Identity()
+                )
             ]
         )
     )

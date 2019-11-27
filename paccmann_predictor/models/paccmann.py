@@ -4,9 +4,10 @@ import torch
 import torch.nn as nn
 
 from ..utils.hyperparams import ACTIVATION_FN_FACTORY, LOSS_FN_FACTORY
-from ..utils.layers import (alpha_projection, convolutional_layer,
-                            dense_attention_layer, dense_layer,
-                            gene_projection, smiles_projection)
+from ..utils.layers import (
+    alpha_projection, convolutional_layer, dense_attention_layer, dense_layer,
+    gene_projection, smiles_projection
+)
 from ..utils.utils import get_device
 
 
@@ -129,7 +130,11 @@ class MCA(nn.Module):
                     (
                         f'convolutional_{index}',
                         convolutional_layer(
-                            num_kernel, kernel_size, self.act_fn, self.dropout
+                            num_kernel,
+                            kernel_size,
+                            act_fn=self.act_fn,
+                            batch_norm=params.get('batch_norm', False),
+                            dropout=self.dropout
                         ).to(self.device)
                     ) for index, (num_kernel, kernel_size) in
                     enumerate(zip(self.filters, self.kernel_sizes))
@@ -178,7 +183,7 @@ class MCA(nn.Module):
                 ]
             )
         )
-
+        # Only applied if params['batch_norm'] = True
         self.batch_norm = nn.BatchNorm1d(self.hidden_sizes[0])
         self.dense_layers = nn.Sequential(
             OrderedDict(
@@ -186,8 +191,11 @@ class MCA(nn.Module):
                     (
                         'dense_{}'.format(ind),
                         dense_layer(
-                            self.hidden_sizes[ind], self.hidden_sizes[ind + 1],
-                            self.act_fn, self.dropout
+                            self.hidden_sizes[ind],
+                            self.hidden_sizes[ind + 1],
+                            act_fn=self.act_fn,
+                            dropout=self.dropout,
+                            batch_norm=params.get('batch_norm', True)
                         ).to(self.device)
                     ) for ind in range(len(self.hidden_sizes) - 1)
                 ]
@@ -244,13 +252,13 @@ class MCA(nn.Module):
                 smiles_context = self.smiles_projections[ind](
                     encoded_smiles[layer]
                 )
+
                 smiles_alphas.append(
                     self.alpha_projections[ind](
                         torch.tanh(gene_context + smiles_context)
                     )
                 )
                 # Sequence is always reduced.
-
                 encodings.append(
                     torch.sum(
                         encoded_smiles[layer] *
