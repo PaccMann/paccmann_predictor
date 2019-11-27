@@ -78,27 +78,13 @@ optional arguments:
 If you use `paccmann_predictor` in your projects, please cite the following:
 
 ```bib
-@article{manica2019toward,
-author = {Manica, Matteo and Oskooei, Ali and Born, Jannis and Subramanian, Vigneshwari and Saez-Rodriguez, Julio and Rodriguez Martinez, Maria},
-title = {Toward Explainable Anticancer Compound Sensitivity Prediction via Multimodal Attention-Based Convolutional Encoders},
-journal = {Molecular Pharmaceutics},
-year = {2019},
-doi = {10.1021/acs.molpharmaceut.9b00520},
-    note ={PMID: 31618586},
-URL = { 
-        https://doi.org/10.1021/acs.molpharmaceut.9b00520
-},
-eprint = { 
-        https://doi.org/10.1021/acs.molpharmaceut.9b00520
+@article{manica2019paccmann,
+    author = {Manica, Matteo and Oskooei, Ali and Born, Jannis and Subramanian, Vigneshwari and Saez-Rodriguez, Julio and Rodriguez Martinez, Maria},
+    title = {Toward Explainable Anticancer Compound Sensitivity Prediction via Multimodal Attention-Based Convolutional Encoders},
+    journal = {Molecular Pharmaceutics},
+    year = {2019},
+    doi = {10.1021/acs.molpharmaceut.9b00520},
+    note = {PMID: 31618586},
 }
 
-}
-@misc{born2019reinforcement,
-    title={Reinforcement learning-driven de-novo design of anticancer compounds conditioned on biomolecular profiles},
-    author={Jannis Born and Matteo Manica and Ali Oskooei and Maria Rodriguez Martinez},
-    year={2019},
-    eprint={1909.05114},
-    archivePrefix={arXiv},
-    primaryClass={q-bio.BM}
-}
 ```
