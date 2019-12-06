@@ -64,6 +64,7 @@ def convolutional_layer(
     act_fn=nn.ReLU(),
     batch_norm=False,
     dropout=0.,
+    input_channels=1
 ):
     """Convolutional layer.
 
@@ -73,6 +74,7 @@ def convolutional_layer(
         act_fn (callable): Functional of the nonlinear activation.
         batch_norm (bool): whether batch normalization is applied.
         dropout (float): Probability for each input value to be 0.
+        input_channels (int): Number of input channels (defaults to 1).
 
     Returns:
         callable: a function that can be called with inputs.
@@ -83,7 +85,7 @@ def convolutional_layer(
                 (
                     'convolve',
                     torch.nn.Conv2d(
-                        1,  # channel_in
+                        input_channels,  # channel_in
                         num_kernel,  # channel_out
                         kernel_size,  # kernel_size
                         padding=[kernel_size[0] // 2, 0]  # pad for valid conv.
