@@ -8,9 +8,6 @@ import pickle
 import sys
 from time import time
 import numpy as np
-# The logger imports tensorflow which may need to be imported before torch
-# (importing tensorflow after torch causes problems dependent on the versions)
-from paccmann_predictor.utils.logger import Logger
 import torch
 from pytoda.datasets import DrugSensitivityDataset
 from pytoda.smiles.smiles_language import SMILESLanguage
@@ -142,8 +139,6 @@ def main(
         }
     )
 
-    # Set the tensorboard logger
-    tb_logger = Logger(os.path.join(model_dir, 'tb_logs'))
     device = get_device()
     logger.info(
         f'Device for data loader is {train_dataset.device} and for '
@@ -226,14 +221,6 @@ def main(
             f"Pearson: {test_pearson_a:.3f}, "
             f"RMSE: {test_rmse_a:.3f}"
         )
-
-        # TensorBoard logging of scalars.
-        info = {
-            'train_loss': train_loss / len(train_loader),
-            'test_loss': test_loss_a,
-        }
-        for tag, value in info.items():
-            tb_logger.scalar_summary(tag, value, epoch + 1)
 
         def save(path, metric, typ, val=None):
             model.save(path.format(typ, metric, params.get('model_fn', 'mca')))
