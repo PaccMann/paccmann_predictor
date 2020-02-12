@@ -77,11 +77,7 @@ def monte_carlo_dropout(
             for ind, inputs in enumerate(loader):
                 # inputs is a tuple with the last element being the labels
                 # outs can be a n-tuple returned by the model
-
-                # NOTE: This is a workaround until the pytoda issue with the
-                # additional dimension is fixed.
-                #outs = model(*inputs[:-1])
-                outs = model(torch.squeeze(inputs[0]))
+                outs = model(*inputs[:-1])
                 preds.append(outs[0] if isinstance(outs, tuple) else outs)
 
             return torch.cat(preds)
@@ -194,11 +190,7 @@ def test_time_augmentation(
             for ind, inputs in enumerate(loader):
                 # inputs is a tuple with the last element being the labels
                 # outs can be a n-tuple returned by the model
-
-                # NOTE: This is a workaround until the pytoda issue with the
-                # additional dimension is fixed.
-                #outs = model(*inputs[:-1])
-                outs = model(torch.squeeze(inputs[0]))
+                outs = model(*inputs[:-1])
                 preds.append(outs[0] if isinstance(outs, tuple) else outs)
 
             return torch.cat(preds)
