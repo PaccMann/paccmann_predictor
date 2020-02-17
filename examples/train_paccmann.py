@@ -97,12 +97,23 @@ def main(
         smiles_language=smiles_language,
         gene_list=gene_list,
         drug_sensitivity_min_max=params.get('drug_sensitivity_min_max', True),
+        drug_sensitivity_processing_parameters=params.get(
+            'drug_sensitivity_processing_parameters', {}
+        ),
         augment=params.get('augment_smiles', True),
         add_start_and_stop=params.get('smiles_start_stop_token', True),
         padding_length=params.get('smiles_padding_length', None),
+        gene_expression_standardize=params.get(
+            'gene_expression_standardize', True
+        ),
+        gene_expression_min_max=params.get('gene_expression_min_max', False),
+        gene_expression_processing_parameters=params.get(
+            'gene_expression_processing_parameters', {}
+        ),
         device=torch.device(params.get('dataset_device', 'cpu')),
         backend='eager'
     )
+
     train_loader = torch.utils.data.DataLoader(
         dataset=train_dataset,
         batch_size=params['batch_size'],
@@ -118,9 +129,21 @@ def main(
         smiles_language=smiles_language,
         gene_list=gene_list,
         drug_sensitivity_min_max=params.get('drug_sensitivity_min_max', True),
+        drug_sensitivity_processing_parameters=params.get(
+            'drug_sensitivity_processing_parameters',
+            train_dataset.drug_sensitivity_processing_parameters
+        ),
         augment=params.get('augment_smiles', True),
         add_start_and_stop=params.get('smiles_start_stop_token', True),
         padding_length=params.get('smiles_padding_length', None),
+        gene_expression_standardize=params.get(
+            'gene_expression_standardize', True
+        ),
+        gene_expression_min_max=params.get('gene_expression_min_max', False),
+        gene_expression_processing_parameters=params.get(
+            'gene_expression_processing_parameters',
+            train_dataset.gene_expression_dataset.processing
+        ),
         device=torch.device(params.get('dataset_device', 'cpu')),
         backend='eager'
     )
@@ -132,12 +155,14 @@ def main(
         num_workers=params.get('num_workers', 0)
     )
 
-    params.update(
-        {
-            'number_of_genes': len(gene_list),
-            'smiles_vocabulary_size': smiles_language.number_of_tokens
-        }
-    )
+    params.update({  # yapf: disable
+        'number_of_genes': len(gene_list),  # yapf: disable
+        'smiles_vocabulary_size': smiles_language.number_of_tokens,
+        'drug_sensitivity_processing_parameters':
+            train_dataset.drug_sensitivity_processing_parameters,
+        'gene_expression_processing_parameters':
+            train_dataset.gene_expression_dataset.processing
+    })
 
     device = get_device()
     logger.info(
@@ -160,7 +185,7 @@ def main(
     # Start training
     logger.info('Training about to start...\n')
     t = time()
-    min_loss, max_pearson = 100, 0
+    min_loss, min_rmse, max_pearson = 100, 1000, 0
 
     for epoch in range(params['epochs']):
 
@@ -224,20 +249,34 @@ def main(
 
         def save(path, metric, typ, val=None):
             model.save(path.format(typ, metric, params.get('model_fn', 'mca')))
+            with open(
+                os.path.join(model_dir, 'results', metric + '.json'), 'w'
+            ) as f:
+                json.dump(info, f)
             if typ == 'best':
                 logger.info(
                     f'\t New best performance in "{metric}"'
                     f' with value : {val:.7f} in epoch: {epoch}'
                 )
 
+        def update_info():
+            return {
+                'best_rmse': min_rmse,
+                'best_pearson': max_pearson,
+                'test_loss': min_loss
+            }
+
         if test_loss_a < min_loss:
+            min_rmse = test_rmse_a
             min_loss = test_loss_a
             min_loss_pearson = test_pearson_a
+            info = update_info()
             save(save_top_model, 'mse', 'best', min_loss)
             ep_loss = epoch
         if test_pearson_a > max_pearson:
             max_pearson = test_pearson_a
             max_pearson_loss = test_loss_a
+            info = update_info()
             save(save_top_model, 'pearson', 'best', max_pearson)
             ep_pearson = epoch
         if (epoch + 1) % params.get('save_model', 100) == 0:
