@@ -52,7 +52,7 @@ def dense_attention_layer(number_of_features):
         OrderedDict(
             [
                 ('dense', nn.Linear(number_of_features, number_of_features)),
-                ('softmax', nn.Softmax())
+                ('softmax', nn.Softmax(dim=-1))
             ]
         )
     )

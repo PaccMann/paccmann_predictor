@@ -172,6 +172,7 @@ def main(
     save_top_model = os.path.join(model_dir, 'weights/{}_{}_{}.pt')
 
     model = MODEL_FACTORY[params.get('model_fn', 'mca')](params).to(device)
+    model.associate_smiles_language(smiles_language)
 
     # Define optimizer
     optimizer = (
