@@ -174,6 +174,12 @@ def main(
         f'{len(test_dataset)}.'
     )
 
+    device = get_device()
+    logger.info(
+        f'Device for data loader is {train_dataset.device} and for '
+        f'model is {device}'
+    )
+    save_top_model = os.path.join(model_dir, 'weights/{}_{}_{}.pt')
     params.update({  # yapf: disable
         'number_of_genes': len(gene_list),  # yapf: disable
         'smiles_vocabulary_size': smiles_language.number_of_tokens,
@@ -183,21 +189,18 @@ def main(
             train_dataset.gene_expression_dataset.processing
     })
 
-    device = get_device()
-    logger.info(
-        f'Device for data loader is {train_dataset.device} and for '
-        f'model is {device}'
-    )
-    save_top_model = os.path.join(model_dir, 'weights/{}_{}_{}.pt')
-
     model = MODEL_FACTORY[params.get('model_fn', 'mca')](params).to(device)
     model.associate_smiles_language(smiles_language)
-
     # Define optimizer
     optimizer = (
         OPTIMIZER_FACTORY[params.get('optimizer', 'Adam')]
         (model.parameters(), lr=params.get('lr', 0.01))
     )
+
+    num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    params.update({'number_of_parameters': num_params})
+    logger.info(f'Number of parameters {num_params}')
+
     # Overwrite params.json file with updated parameters.
     with open(os.path.join(model_dir, 'model_params.json'), 'w') as fp:
         json.dump(params, fp)
@@ -206,6 +209,9 @@ def main(
     logger.info('Training about to start...\n')
     t = time()
     min_loss, min_rmse, max_pearson = 100, 1000, 0
+    model.save(
+        save_top_model.format('epoch', '0', params.get('model_fn', 'mca'))
+    )
 
     for epoch in range(params['epochs']):
 
