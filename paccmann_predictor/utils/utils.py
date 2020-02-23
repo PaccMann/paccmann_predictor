@@ -37,14 +37,23 @@ def attention_list_to_matrix(coding_tuple, dim=2):
     return raw_coeff, torch.mean(raw_coeff, dim=dim)
 
 
+def get_log_molar(y, ic50_max=None, ic50_min=None):
+    """
+    Converts PaccMann predictions from [0,1] to log(micromolar) range.
+    """
+    return y * (ic50_max - ic50_min) + ic50_min
+
+
 class Squeeze(nn.Module):
     """Squeeze wrapper for nn.Sequential."""
+
     def forward(self, data):
         return torch.squeeze(data)
 
 
 class Unsqueeze(nn.Module):
     """Unsqueeze wrapper for nn.Sequential."""
+
     def __init__(self, axis):
         super(Unsqueeze, self).__init__()
         self.axis = axis

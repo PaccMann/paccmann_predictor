@@ -2,20 +2,24 @@ from collections import OrderedDict
 
 import torch
 import torch.nn as nn
+import pytoda
+from pytoda.smiles.transforms import AugmentTensor
 
 from ..utils.hyperparams import ACTIVATION_FN_FACTORY, LOSS_FN_FACTORY
+from ..utils.interpret import monte_carlo_dropout, test_time_augmentation
 from ..utils.layers import (
     alpha_projection, convolutional_layer, dense_attention_layer, dense_layer,
     gene_projection, smiles_projection
 )
-from ..utils.utils import get_device
+from ..utils.utils import get_device, get_log_molar
 
 
 class MCA(nn.Module):
     """Multiscale Convolutional Attentive Encoder.
 
     This is the MCA model as presented in the authors publication in
-    Molecular Pharmaceutics https://arxiv.org/abs/1904.11223.
+    Molecular Pharmaceutics:
+        https://pubs.acs.org/doi/10.1021/acs.molpharmaceut.9b00520.
     """
 
     def __init__(self, params, *args, **kwargs):
@@ -77,6 +81,16 @@ class MCA(nn.Module):
         self.device = get_device()
         self.params = params
         self.loss_fn = LOSS_FN_FACTORY[params.get('loss_fn', 'mse')]
+        self.min_max_scaling = True if params.get(
+            'drug_sensitivity_processing_parameters', {}
+        ) != {} else False
+        if self.min_max_scaling:
+            self.IC50_max = params[
+                'drug_sensitivity_processing_parameters'
+            ]['parameters']['max']  # yapf: disable
+            self.IC50_min = params[
+                'drug_sensitivity_processing_parameters'
+            ]['parameters']['min']  # yapf: disable
 
         # Model inputs
         self.number_of_genes = params.get('number_of_genes', 2128)
@@ -214,12 +228,14 @@ class MCA(nn.Module):
             )
         )
 
-    def forward(self, smiles, gep):
+    def forward(self, smiles, gep, confidence=False):
         """Forward pass through the MCA.
 
         Args:
             smiles (torch.Tensor): of type int and shape `[bs, seq_length]`.
             gep (torch.Tensor): of shape `[bs, num_genes]`.
+            confidence (bool, optional) whether the confidence estimates are
+                performed.
 
         Returns:
             (torch.Tensor, torch.Tensor): predictions, prediction_dict
@@ -278,15 +294,77 @@ class MCA(nn.Module):
             inputs = dl(inputs)
 
         predictions = self.final_dense(inputs)
-        prediction_dict = {
-            'gene_attention': gene_alphas,
-            'smiles_attention': smiles_alphas,
-            'IC50': predictions,
-        }
+
+        prediction_dict = {}
+
+        if not self.training:
+            # The below is to ease postprocessing
+            smiles_attention_weights = torch.mean(
+                torch.cat(
+                    [torch.unsqueeze(p, -1) for p in smiles_alphas], axis=-1
+                ),
+                axis=-1
+            )
+            prediction_dict.update({
+                'gene_attention': gene_alphas,
+                'smiles_attention': smiles_attention_weights,
+                'IC50': predictions,
+                'log_micromolar_IC50':
+                    get_log_molar(
+                        predictions,
+                        ic50_max=self.IC50_max,
+                        ic50_min=self.IC50_min
+                    ) if self.min_max_scaling else predictions
+            })  # yapf: disable
+
+            if confidence:
+                augmenter = AugmentTensor(self.smiles_language)
+                epistemic_conf = monte_carlo_dropout(
+                    self,
+                    regime='tensors',
+                    tensors=(smiles, gep),
+                    repetitions=5
+                )
+                aleatoric_conf = test_time_augmentation(
+                    self,
+                    regime='tensors',
+                    tensors=(smiles, gep),
+                    repetitions=5,
+                    augmenter=augmenter,
+                    tensors_to_augment=0
+                )
+
+                prediction_dict.update({
+                    'epistemic_confidence': epistemic_conf,
+                    'aleatoric_confidence': aleatoric_conf
+                })  # yapf: disable
+
         return predictions, prediction_dict
 
     def loss(self, yhat, y):
         return self.loss_fn(yhat, y)
+
+    def associate_smiles_language(self, smiles_language):
+        """
+        Bind a SMILES language object to the model. Is only used inside the
+        confidence estimation.
+
+        Arguments:
+            smiles_language {[pytoda.smiles.smiles_language.SMILESLanguage]}
+            -- [A SMILES language object]
+
+        Raises:
+            TypeError:
+        """
+        if not isinstance(
+            smiles_language, pytoda.smiles.smiles_language.SMILESLanguage
+        ):
+            raise TypeError(
+                'Please insert a smiles language (object of type '
+                'pytoda.smiles.smiles_language.SMILESLanguage). Given was '
+                f'{type(smiles_language)}'
+            )
+        self.smiles_language = smiles_language
 
     def load(self, path, *args, **kwargs):
         """Load model from path."""
