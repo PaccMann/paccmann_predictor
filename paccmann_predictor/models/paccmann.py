@@ -2,6 +2,7 @@ from collections import OrderedDict
 
 import torch
 import torch.nn as nn
+import pytoda
 from pytoda.smiles.transforms import AugmentTensor
 
 from ..utils.hyperparams import ACTIVATION_FN_FACTORY, LOSS_FN_FACTORY
@@ -86,10 +87,10 @@ class MCA(nn.Module):
         if self.min_max_scaling:
             self.IC50_max = params[
                 'drug_sensitivity_processing_parameters'
-            ]['parameters']['maximum']  # yapf: disable
+            ]['parameters']['max']  # yapf: disable
             self.IC50_min = params[
                 'drug_sensitivity_processing_parameters'
-            ]['parameters']['minimum']  # yapf: disable
+            ]['parameters']['min']  # yapf: disable
 
         # Model inputs
         self.number_of_genes = params.get('number_of_genes', 2128)
@@ -227,13 +228,14 @@ class MCA(nn.Module):
             )
         )
 
-    def forward(self, smiles, gep, mode='train', confidence=False):
+    def forward(self, smiles, gep, confidence=False):
         """Forward pass through the MCA.
 
         Args:
             smiles (torch.Tensor): of type int and shape `[bs, seq_length]`.
             gep (torch.Tensor): of shape `[bs, num_genes]`.
-            mode (str) from {'train', 'eval'}, determines the returned dict.
+            confidence (bool, optional) whether the confidence estimates are
+                performed.
 
         Returns:
             (torch.Tensor, torch.Tensor): predictions, prediction_dict
@@ -295,7 +297,7 @@ class MCA(nn.Module):
 
         prediction_dict = {}
 
-        if mode == 'eval':
+        if not self.training:
             # The below is to ease postprocessing
             smiles_attention_weights = torch.mean(
                 torch.cat(
@@ -303,13 +305,8 @@ class MCA(nn.Module):
                 ),
                 axis=-1
             )
-            top_5_genes = torch.argsort(
-                gene_alphas, axis=1, descending=True
-            )[:, :5]  # yapf: disable
-            top_5_weights = top_5_genes.gather(1, top_5_genes)
             prediction_dict.update({
                 'gene_attention': gene_alphas,
-                'top_5_genes': (top_5_genes, top_5_weights),
                 'smiles_attention': smiles_attention_weights,
                 'IC50': predictions,
                 'log_micromolar_IC50':

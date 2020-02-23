@@ -107,6 +107,8 @@ def monte_carlo_dropout(
         (predictions.std(axis=-1) - MIN_STD) / (MAX_STD - MIN_STD)
     ) + 1
 
+    model.eval()
+
     return confidences
 
 

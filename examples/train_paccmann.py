@@ -101,6 +101,14 @@ def main(
             'drug_sensitivity_processing_parameters', {}
         ),
         augment=params.get('augment_smiles', True),
+        canonical=params.get('canonical', False),
+        kekulize=params.get('kekulize', False),
+        all_bonds_explicit=params.get('all_bonds_explicit', False),
+        all_hs_explicit=params.get('all_hs_explicit', False),
+        randomize=params.get('randomize', False),
+        remove_bonddir=params.get('remove_bonddir', False),
+        remove_chirality=params.get('remove_chirality', False),
+        selfies=params.get('selfies', False),
         add_start_and_stop=params.get('smiles_start_stop_token', True),
         padding_length=params.get('smiles_padding_length', None),
         gene_expression_standardize=params.get(
@@ -113,7 +121,6 @@ def main(
         device=torch.device(params.get('dataset_device', 'cpu')),
         backend='eager'
     )
-
     train_loader = torch.utils.data.DataLoader(
         dataset=train_dataset,
         batch_size=params['batch_size'],
@@ -134,6 +141,14 @@ def main(
             train_dataset.drug_sensitivity_processing_parameters
         ),
         augment=params.get('augment_smiles', True),
+        canonical=params.get('canonical', False),
+        kekulize=params.get('kekulize', False),
+        all_bonds_explicit=params.get('all_bonds_explicit', False),
+        all_hs_explicit=params.get('all_hs_explicit', False),
+        randomize=params.get('randomize', False),
+        remove_bonddir=params.get('remove_bonddir', False),
+        remove_chirality=params.get('remove_chirality', False),
+        selfies=params.get('selfies', False),
         add_start_and_stop=params.get('smiles_start_stop_token', True),
         padding_length=params.get('smiles_padding_length', None),
         gene_expression_standardize=params.get(
@@ -153,6 +168,10 @@ def main(
         shuffle=True,
         drop_last=True,
         num_workers=params.get('num_workers', 0)
+    )
+    logger.info(
+        f'Training dataset has {len(train_dataset)} samples, test set has '
+        f'{len(test_dataset)}.'
     )
 
     params.update({  # yapf: disable
