@@ -301,9 +301,9 @@ class MCA(nn.Module):
             # The below is to ease postprocessing
             smiles_attention_weights = torch.mean(
                 torch.cat(
-                    [torch.unsqueeze(p, -1) for p in smiles_alphas], axis=-1
+                    [torch.unsqueeze(p, -1) for p in smiles_alphas], dim=-1
                 ),
-                axis=-1
+                dim=-1
             )
             prediction_dict.update({
                 'gene_attention': gene_alphas,

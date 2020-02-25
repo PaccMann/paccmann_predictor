@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import pickle
+import re
 import sys
 from time import time
 import numpy as np
@@ -140,7 +141,7 @@ def main(
             'drug_sensitivity_processing_parameters',
             train_dataset.drug_sensitivity_processing_parameters
         ),
-        augment=params.get('augment_smiles', True),
+        augment=params.get('augment_test_smiles', False),
         canonical=params.get('canonical', False),
         kekulize=params.get('kekulize', False),
         all_bonds_explicit=params.get('all_bonds_explicit', False),
@@ -191,6 +192,24 @@ def main(
 
     model = MODEL_FACTORY[params.get('model_fn', 'mca')](params).to(device)
     model.associate_smiles_language(smiles_language)
+
+    if os.path.isfile(os.path.join(model_dir, 'weights', 'best_mse_mca.pt')):
+        logger.info('Found existing model, restoring now...')
+        try:
+            model.load(os.path.join(model_dir, 'weights', 'mse_best_mca.pt'))
+
+            with open(
+                os.path.join(model_dir, 'results', 'mse.json'), 'r'
+            ) as f:
+                info = json.load(f)
+
+                min_rmse = info['best_rmse']
+                max_pearson = info['best_pearson']
+                min_loss = info['test_loss']
+
+        except:
+            min_loss, min_rmse, max_pearson = 100, 1000, 0
+
     # Define optimizer
     optimizer = (
         OPTIMIZER_FACTORY[params.get('optimizer', 'Adam')]
@@ -208,7 +227,7 @@ def main(
     # Start training
     logger.info('Training about to start...\n')
     t = time()
-    min_loss, min_rmse, max_pearson = 100, 1000, 0
+
     model.save(
         save_top_model.format('epoch', '0', params.get('model_fn', 'mca'))
     )
@@ -259,12 +278,10 @@ def main(
             [p.cpu() for preds in predictions for p in preds]
         )
         labels = np.array([l.cpu() for label in labels for l in label])
-        test_pearson_a = pearsonr(predictions, labels)
-        test_rmse_a = np.sqrt(np.mean((predictions - labels)**2))
-        np.save(
-            os.path.join(model_dir, 'results', 'preds.npy'),
-            np.hstack([predictions, labels])
+        test_pearson_a = pearsonr(
+            torch.Tensor(predictions), torch.Tensor(labels)
         )
+        test_rmse_a = np.sqrt(np.mean((predictions - labels)**2))
         test_loss_a = test_loss / len(test_loader)
         logger.info(
             f"\t **** TESTING **** Epoch [{epoch + 1}/{params['epochs']}], "
@@ -279,6 +296,10 @@ def main(
                 os.path.join(model_dir, 'results', metric + '.json'), 'w'
             ) as f:
                 json.dump(info, f)
+            np.save(
+                os.path.join(model_dir, 'results', metric + '_preds.npy'),
+                np.vstack([predictions, labels])
+            )
             if typ == 'best':
                 logger.info(
                     f'\t New best performance in "{metric}"'
@@ -287,9 +308,10 @@ def main(
 
         def update_info():
             return {
-                'best_rmse': min_rmse,
-                'best_pearson': max_pearson,
-                'test_loss': min_loss
+                'best_rmse': str(min_rmse),
+                'best_pearson': str(float(max_pearson)),
+                'test_loss': str(min_loss),
+                'predictions': [float(p) for p in predictions]
             }
 
         if test_loss_a < min_loss:
