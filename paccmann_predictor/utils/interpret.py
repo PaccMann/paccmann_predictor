@@ -100,7 +100,7 @@ def monte_carlo_dropout(
         predictions = [
             torch.unsqueeze(call_fn(), -1) for _ in range(repetitions)
         ]
-    predictions = torch.cat(predictions, axis=-1)
+    predictions = torch.cat(predictions, dim=-1)
 
     # Scale confidences to [0, 1]
     confidences = -1 * (
@@ -244,7 +244,7 @@ def test_time_augmentation(
         predictions = [
             torch.unsqueeze(call_fn(), -1) for _ in range(repetitions)
         ]
-    predictions = torch.cat(predictions, axis=-1)
+    predictions = torch.cat(predictions, dim=-1)
 
     # Scale confidences to [0, 1]
     confidences = -1 * (
