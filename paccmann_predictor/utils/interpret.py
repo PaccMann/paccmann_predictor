@@ -104,7 +104,7 @@ def monte_carlo_dropout(
 
     # Scale confidences to [0, 1]
     confidences = -1 * (
-        (predictions.std(axis=-1) - MIN_STD) / (MAX_STD - MIN_STD)
+        (predictions.std(dim=-1) - MIN_STD) / (MAX_STD - MIN_STD)
     ) + 1
 
     model.eval()
@@ -248,7 +248,7 @@ def test_time_augmentation(
 
     # Scale confidences to [0, 1]
     confidences = -1 * (
-        (predictions.std(axis=-1) - MIN_STD) / (MAX_STD - MIN_STD)
+        (predictions.std(dim=-1) - MIN_STD) / (MAX_STD - MIN_STD)
     ) + 1
 
     return torch.clamp(confidences, min=0)

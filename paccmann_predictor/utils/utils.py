@@ -54,9 +54,9 @@ class Squeeze(nn.Module):
 class Unsqueeze(nn.Module):
     """Unsqueeze wrapper for nn.Sequential."""
 
-    def __init__(self, axis):
+    def __init__(self, dim):
         super(Unsqueeze, self).__init__()
-        self.axis = axis
+        self.dim = dim
 
     def forward(self, data):
-        return torch.unsqueeze(data, self.axis)
+        return torch.unsqueeze(data, self.dim)
