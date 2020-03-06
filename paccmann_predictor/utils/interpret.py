@@ -46,6 +46,8 @@ def monte_carlo_dropout(
         confidences {torch.Tensor} - shape: loader.dataset x num_tasks
             Contains the inverse normalized standard deviation of the MC
             dropout estimates.
+        predictions {torch.Tensor} - shape: loader.dataset x num_tasks
+            Contains the averaged predictions across all MC  dropout estimates.
     """
 
     if regime != 'loader' and regime != 'tensors':
@@ -109,7 +111,7 @@ def monte_carlo_dropout(
 
     model.eval()
 
-    return confidences
+    return confidences, torch.mean(predictions, -1)
 
 
 def test_time_augmentation(
@@ -167,6 +169,8 @@ def test_time_augmentation(
         confidences {torch.Tensor} - shape: loader.dataset x num_tasks
             Contains the inverse normalized standard deviation of the MC
             dropout estimates.
+        predictions {torch.Tensor} - shape: loader.dataset x num_tasks
+            Contains the averaged predictions across estimates.
     """
 
     if regime != 'loader' and regime != 'tensors':
@@ -251,4 +255,4 @@ def test_time_augmentation(
         (predictions.std(dim=-1) - MIN_STD) / (MAX_STD - MIN_STD)
     ) + 1
 
-    return torch.clamp(confidences, min=0)
+    return torch.clamp(confidences, min=0), torch.mean(predictions, -1)
