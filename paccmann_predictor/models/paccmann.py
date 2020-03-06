@@ -60,6 +60,8 @@ class MCA(nn.Module):
                 hidden dense layers. Defaults to [1024, 512].
             smiles_attention_size (int, optional): size of the attentive layer
                 for the smiles sequence. Defaults to 64.
+            temperature (float, optional): Softmax temperature parameter for
+                gene attention (0, inf). 
 
         Example params:
         ```
@@ -110,6 +112,7 @@ class MCA(nn.Module):
         if params.get('gene_to_dense', False):  # Optional skip connection
             self.hidden_sizes[0] += self.number_of_genes
         self.dropout = params.get('dropout', 0.5)
+        self.temperature = params.get(temperature, 1.)
         self.act_fn = ACTIVATION_FN_FACTORY[
             params.get('activation_fn', 'relu')]
         self.kernel_sizes = params.get(
@@ -135,7 +138,7 @@ class MCA(nn.Module):
             scale_grad_by_freq=params.get('embed_scale_grad', False)
         )
         self.gene_attention_layer = dense_attention_layer(
-            self.number_of_genes
+            self.number_of_genes, temperature=self.temperature
         ).to(self.device)
 
         self.convolutional_layers = nn.Sequential(

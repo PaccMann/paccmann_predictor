@@ -17,7 +17,7 @@ from collections import OrderedDict
 import torch
 import torch.nn as nn
 
-from .utils import Squeeze, Unsqueeze, get_device
+from .utils import Squeeze, Unsqueeze, get_device, Temperature
 
 DEVICE = get_device()
 
@@ -40,11 +40,16 @@ def dense_layer(
     )
 
 
-def dense_attention_layer(number_of_features):
+def dense_attention_layer(
+    number_of_features: int, temperature: float = 1.
+) -> nn.Sequential:
     """Attention mechanism layer for dense inputs.
 
     Args:
         number_of_features (int): Size to allocate weight matrix.
+        temperature (float): Softmax temperature parameter (0, inf). Lower
+            temperature (< 1) result in a more descriminative/spiky softmax,
+            higher temperature (> 1) results in a smoother attention.
     Returns:
         callable: a function that can be called with inputs.
     """
@@ -52,6 +57,7 @@ def dense_attention_layer(number_of_features):
         OrderedDict(
             [
                 ('dense', nn.Linear(number_of_features, number_of_features)),
+                ('temperature', Temperature(temperature)),
                 ('softmax', nn.Softmax(dim=-1))
             ]
         )
