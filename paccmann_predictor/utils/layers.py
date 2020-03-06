@@ -41,7 +41,7 @@ def dense_layer(
 
 
 def dense_attention_layer(
-    number_of_features: int, temperature: float = 1.
+    number_of_features: int, temperature: float = 1., dropout=0.
 ) -> nn.Sequential:
     """Attention mechanism layer for dense inputs.
 
@@ -57,6 +57,7 @@ def dense_attention_layer(
         OrderedDict(
             [
                 ('dense', nn.Linear(number_of_features, number_of_features)),
+                ('dropout', nn.Dropout(p=dropout)),
                 ('temperature', Temperature(temperature)),
                 ('softmax', nn.Softmax(dim=-1))
             ]
