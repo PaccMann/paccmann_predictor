@@ -195,20 +195,17 @@ def main(
 
     if os.path.isfile(os.path.join(model_dir, 'weights', 'best_mse_mca.pt')):
         logger.info('Found existing model, restoring now...')
-        try:
-            model.load(os.path.join(model_dir, 'weights', 'mse_best_mca.pt'))
+        model.load(os.path.join(model_dir, 'weights', 'mse_best_mca.pt'))
 
-            with open(
-                os.path.join(model_dir, 'results', 'mse.json'), 'r'
-            ) as f:
-                info = json.load(f)
+        with open(os.path.join(model_dir, 'results', 'mse.json'), 'r') as f:
+            info = json.load(f)
 
-                min_rmse = info['best_rmse']
-                max_pearson = info['best_pearson']
-                min_loss = info['test_loss']
+            min_rmse = info['best_rmse']
+            max_pearson = info['best_pearson']
+            min_loss = info['test_loss']
 
-        except:
-            min_loss, min_rmse, max_pearson = 100, 1000, 0
+    else:
+        min_loss, min_rmse, max_pearson = 100, 1000, 0
 
     # Define optimizer
     optimizer = (
