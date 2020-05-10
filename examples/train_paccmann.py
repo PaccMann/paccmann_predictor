@@ -5,7 +5,6 @@ import json
 import logging
 import os
 import pickle
-import re
 import sys
 from time import time
 import numpy as np
@@ -191,7 +190,7 @@ def main(
     })
 
     model = MODEL_FACTORY[params.get('model_fn', 'mca')](params).to(device)
-    model.associate_smiles_language(smiles_language)
+    model._associate_language(smiles_language)
 
     if os.path.isfile(os.path.join(model_dir, 'weights', 'best_mse_mca.pt')):
         logger.info('Found existing model, restoring now...')
