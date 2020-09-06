@@ -145,7 +145,7 @@ def alpha_projection(attention_size):
     ).to(DEVICE)
 
 
-class context_attention_layer(nn.Module):
+class ContextAttentionLayer(nn.Module):
     """
     Implements context attention as in the PaccMann paper (Figure 2C) in
     Molecular Pharmaceutics.

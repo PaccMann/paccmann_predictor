@@ -8,8 +8,8 @@ from pytoda.smiles.transforms import AugmentTensor
 from ..utils.hyperparams import ACTIVATION_FN_FACTORY, LOSS_FN_FACTORY
 from ..utils.interpret import monte_carlo_dropout, test_time_augmentation
 from ..utils.layers import (
-    alpha_projection, convolutional_layer, dense_attention_layer, dense_layer,
-    gene_projection, smiles_projection
+    convolutional_layer, dense_attention_layer, dense_layer,
+    ContextAttentionLayer
 )
 from ..utils.utils import get_device, get_log_molar
 
@@ -163,45 +163,21 @@ class MCA(nn.Module):
 
         smiles_hidden_sizes = [params['smiles_embedding_size']] + self.filters
 
-        # Defines contextual attention mechanism
-        self.gene_projections = nn.Sequential(
-            OrderedDict(
-                [
-                    (
-                        f'gene_projection_{self.multiheads[0]*layer+index}',
-                        gene_projection(
-                            self.number_of_genes, self.smiles_attention_size
-                        )
-                    ) for layer in range(len(self.multiheads))
-                    for index in range(self.multiheads[layer])
-                ]
-            )
-        )
-        self.smiles_projections = nn.Sequential(
-            OrderedDict(
-                [
-                    (
-                        f'smiles_projection_{self.multiheads[0]*layer+index}',
-                        smiles_projection(
-                            smiles_hidden_sizes[layer],
-                            self.smiles_attention_size
-                        )
-                    ) for layer in range(len(self.multiheads))
-                    for index in range(self.multiheads[layer])
-                ]
-            )
-        )
-        self.alpha_projections = nn.Sequential(
-            OrderedDict(
-                [
-                    (
-                        f'alpha_projection_{self.multiheads[0]*layer+index}',
-                        alpha_projection(self.smiles_attention_size)
-                    ) for layer in range(len(self.multiheads))
-                    for index in range(self.multiheads[layer])
-                ]
-            )
-        )
+        self.context_attention_layers = nn.Sequential(OrderedDict([
+            (
+                f'context_attention_{layer}',
+                ContextAttentionLayer(
+                    smiles_hidden_sizes[layer],
+                    42,  # Can be anything since context is only 1D (omic)
+                    self.number_of_genes,
+                    attention_size=self.smiles_attention_size,
+                    individual_nonlinearity=params.get(
+                        'context_nonlinearity', nn.Sequential()
+                    )
+                )
+            ) for layer in range(len(self.multiheads))
+            ]))  # yapf: disable
+
         # Only applied if params['batch_norm'] = True
         self.batch_norm = nn.BatchNorm1d(self.hidden_sizes[0])
         self.dense_layers = nn.Sequential(
@@ -266,26 +242,35 @@ class MCA(nn.Module):
 
         # NOTE: SMILES Attention mechanism
         smiles_alphas, encodings = [], []
-        for layer in range(len(self.multiheads)):
-            for head in range(self.multiheads[layer]):
-                ind = self.multiheads[0] * layer + head
-                gene_context = self.gene_projections[ind](encoded_genes)
-                smiles_context = self.smiles_projections[ind](
-                    encoded_smiles[layer]
-                )
+        # for layer in range(len(self.multiheads)):
+        #     for head in range(self.multiheads[layer]):
+        #         ind = self.multiheads[0] * layer + head
+        #         gene_context = self.gene_projections[ind](encoded_genes)
+        #         smiles_context = self.smiles_projections[ind](
+        #             encoded_smiles[layer]
+        #         )
 
-                smiles_alphas.append(
-                    self.alpha_projections[ind](
-                        torch.tanh(gene_context + smiles_context)
-                    )
-                )
-                # Sequence is always reduced.
-                encodings.append(
-                    torch.sum(
-                        encoded_smiles[layer] *
-                        torch.unsqueeze(smiles_alphas[-1], -1), 1
-                    )
-                )
+        #         smiles_alphas.append(
+        #             self.alpha_projections[ind](
+        #                 torch.tanh(gene_context + smiles_context)
+        #             )
+        #         )
+        #         # Sequence is always reduced.
+        #         encodings.append(
+        #             torch.sum(
+        #                 encoded_smiles[layer] *
+        #                 torch.unsqueeze(smiles_alphas[-1], -1), 1
+        #             )
+        #         )
+
+        encodings, smiles_alphas = zip(
+            *[
+                layer(reference, torch.unsqueeze(encoded_genes, 1))
+                for layer, reference in
+                zip(self.context_attention_layers, encoded_smiles)
+            ]
+        )
+
         encodings = torch.cat(encodings, dim=1)
         if self.params.get('gene_to_dense', False):
             encodings = torch.cat([encodings, gep], dim=1)
