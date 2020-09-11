@@ -25,28 +25,28 @@ def monte_carlo_dropout(
 
 
     Arguments:
-        model {torch.nn.Module} -- The torch network to be investigated. 
+        model (torch.nn.Module): The torch network to be investigated. 
             NOTE: Model is assumed to return either a single tensor of
             predictions or a n-tupel with the first part being a tensor
             of predictions. They need to be [0, 1] where 0 and 1 represent
             two classes.
-        regime {str} -- from {'loader', 'tensors'} -- If 'loader' is used the
+        regime (str): from {'loader', 'tensors'}. If 'loader' is used the
             the loader argument needs to be fed. If 'tensors' is used all
             necessary input tensors need to be fed in the right shape
-        loader {torch.utils.data.DataLoader} -- The dataset to be tested
+        loader (torch.utils.data.DataLoader): The dataset to be tested
             The loader is expected to return a tuple with the last item
             being the labels and all others the model inputs.
             Is only used if 'regime'=='loader'
-        tensors {torch.Tensor, tuple} -- The input tensor(s) for the model
+        tensors (torch.Tensor, tuple): The input tensor(s) for the model
             Can either be a single tensor or a tuple of tensors (in the
             right order)
-        repetitions {int} -- Amount of forward passes for each sample
+        repetitions (int): Amount of forward passes for each sample
 
     Returns:
-        confidences {torch.Tensor} - shape: loader.dataset x num_tasks
+        confidences (torch.Tensor) - shape: loader.dataset x num_tasks
             Contains the inverse normalized standard deviation of the MC
             dropout estimates.
-        predictions {torch.Tensor} - shape: loader.dataset x num_tasks
+        predictions (torch.Tensor) - shape: loader.dataset x num_tasks
             Contains the averaged predictions across all MC  dropout estimates.
     """
 
@@ -135,30 +135,30 @@ def test_time_augmentation(
     classification like MNIST.
 
     Arguments:
-        model {torch.nn.Module} -- The torch network to be investigated. 
+        model (torch.nn.Module): The torch network to be investigated. 
             NOTE: Model is assumed to return either a single tensor of
             predictions or a n-tupel with the first part being a tensor
             of predictions. They need to be [0, 1] where 0 and 1 represent
             two classes.
-        regime {str} -- from {'loader', 'tensors'} -- If 'loader' is used the
+        regime (str): from {'loader', 'tensors'}: If 'loader' is used the
             the loader argument needs to be fed. If 'tensors' is used all
             necessary input tensors need to be fed in the right shape
-        loader {torch.utils.data.DataLoader} -- The dataset to be tested
+        loader (torch.utils.data.DataLoader): The dataset to be tested
             The loader is expected to return a tuple with the last item
             being the labels and all others the model inputs. The loader should
             natively perform data augmentation.
             Is only used if 'regime'=='loader'.
-        tensors {torch.Tensor, tuple} -- The input tensor(s) for the model
+        tensors (torch.Tensor, tuple): The input tensor(s) for the model
             Can either be a single tensor or a tuple of tensors (in the
             right order)
-        repetitions {int} -- Amount of forward passes for each sample
-        augmenter {transform object, list} -- This can either be function that
+        repetitions (int): Amount of forward passes for each sample
+        augmenter (transform object, list): This can either be function that
             performs the augmentation, e.g. an object of type
             pytoda.smiles.AugmentTensor (if `tensors` represents a SMILES
             tensor). Alternatively, it can also be a list of augmenters with
             the same length like tensors_to_augment.
             Only used if regime=='tensors'.
-        tensors_to_augment  {int, list} -- This can either be an integer
+        tensors_to_augment  (Union[int, list]): This can either be an integer
             pointing to the tensor to be augmented. E.g. tensors_to_augment = 0
             augments the first tensor in tensors. Can also be a list of the
             same length as augmenter (if several augmentations should be
@@ -166,10 +166,10 @@ def test_time_augmentation(
             Only used if regime=='tensors'.
 
     Returns:
-        confidences {torch.Tensor} - shape: loader.dataset x num_tasks
+        confidences (torch.Tensor) - shape: loader.dataset x num_tasks
             Contains the inverse normalized standard deviation of the MC
             dropout estimates.
-        predictions {torch.Tensor} - shape: loader.dataset x num_tasks
+        predictions (torch.Tensor) - shape: loader.dataset x num_tasks
             Contains the averaged predictions across estimates.
     """
 
