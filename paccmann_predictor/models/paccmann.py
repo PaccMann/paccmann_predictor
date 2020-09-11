@@ -312,7 +312,7 @@ class MCA(nn.Module):
     def loss(self, yhat, y):
         return self.loss_fn(yhat, y)
 
-    def associate_smiles_language(self, smiles_language):
+    def _associate_language(self, smiles_language):
         """
         Bind a SMILES language object to the model. Is only used inside the
         confidence estimation.
