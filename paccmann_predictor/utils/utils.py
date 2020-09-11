@@ -60,3 +60,14 @@ class Unsqueeze(nn.Module):
 
     def forward(self, data):
         return torch.unsqueeze(data, self.dim)
+
+
+class Temperature(nn.Module):
+    """Temperature wrapper for nn.Sequential."""
+
+    def __init__(self, temperature):
+        super(Temperature, self).__init__()
+        self.temperature = temperature
+
+    def forward(self, data):
+        return data / self.temperature
