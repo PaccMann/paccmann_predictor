@@ -20,12 +20,12 @@ IC50 prediction using drug properties and tissue-specific cell line (gene expres
 ## Installation
 
 The library itself has few dependencies (see [setup.py](setup.py)) with loose requirements. 
-To run the example training script we provide environment files under `examples/`.
+To run the example training script we provide environment files under `examples/IC50/`.
 
 Create a conda environment:
 
 ```sh
-conda env create -f examples/conda.yml
+conda env create -f examples/IC50/conda.yml
 ```
 
 Activate the environment:
@@ -42,11 +42,11 @@ pip install -e .
 
 ## Example usage
 
-In the `examples` directory is a training script [train_paccmann.py](./examples/train_paccmann.py) that makes use
+In the `examples` directory is a training script [train_paccmann.py](./examples/IC50/train_paccmann.py) that makes use
 of `paccmann_predictor`.
 
 ```console
-(paccmann_predictor) $ python examples/train_paccmann.py -h
+(paccmann_predictor) $ python examples/IC50/train_paccmann.py -h
 usage: train_paccmann.py [-h]
                          train_sensitivity_filepath test_sensitivity_filepath
                          gep_filepath smi_filepath gene_filepath
@@ -71,7 +71,7 @@ optional arguments:
   -h, --help            show this help message and exit
 ```
 
-`params_filepath` could point to [examples/example_params.json](examples/example_params.json), examples for other files can be downloaded from [here](https://ibm.box.com/v/paccmann-pytoda-data).
+`params_filepath` could point to [examples/IC50/example_params.json](examples/IC50/example_params.json), examples for other files can be downloaded from [here](https://ibm.box.com/v/paccmann-pytoda-data).
 
 ## References
 
