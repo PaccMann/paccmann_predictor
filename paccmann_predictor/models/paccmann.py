@@ -241,28 +241,6 @@ class MCA(nn.Module):
         ]
 
         # NOTE: SMILES Attention mechanism
-        smiles_alphas, encodings = [], []
-        # for layer in range(len(self.multiheads)):
-        #     for head in range(self.multiheads[layer]):
-        #         ind = self.multiheads[0] * layer + head
-        #         gene_context = self.gene_projections[ind](encoded_genes)
-        #         smiles_context = self.smiles_projections[ind](
-        #             encoded_smiles[layer]
-        #         )
-
-        #         smiles_alphas.append(
-        #             self.alpha_projections[ind](
-        #                 torch.tanh(gene_context + smiles_context)
-        #             )
-        #         )
-        #         # Sequence is always reduced.
-        #         encodings.append(
-        #             torch.sum(
-        #                 encoded_smiles[layer] *
-        #                 torch.unsqueeze(smiles_alphas[-1], -1), 1
-        #             )
-        #         )
-
         encodings, smiles_alphas = zip(
             *[
                 layer(reference, torch.unsqueeze(encoded_genes, 1))
