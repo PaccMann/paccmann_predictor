@@ -4,7 +4,7 @@ from collections import OrderedDict
 import torch
 import torch.nn as nn
 
-from .utils import Squeeze, get_device, Temperature
+from .utils import Squeeze, get_device, Temperature, Unsqueeze
 
 DEVICE = get_device()
 
@@ -208,3 +208,38 @@ class ContextAttentionLayer(nn.Module):
         output = torch.sum(reference * torch.unsqueeze(alphas, -1), 1)
 
         return output, alphas
+
+
+def gene_projection(num_genes, attention_size, ind_nonlin=nn.Sequential()):
+    return nn.Sequential(
+        OrderedDict(
+            [
+                ('projection', nn.Linear(num_genes, attention_size)),
+                ('act_fn', ind_nonlin), ('expand', Unsqueeze(1))
+            ]
+        )
+    ).to(DEVICE)
+
+
+def smiles_projection(
+    smiles_hidden_size, attention_size, ind_nonlin=nn.Sequential()
+):
+    return nn.Sequential(
+        OrderedDict(
+            [
+                ('projection', nn.Linear(smiles_hidden_size, attention_size)),
+                ('act_fn', ind_nonlin)
+            ]
+        )
+    ).to(DEVICE)
+
+
+def alpha_projection(attention_size):
+    return nn.Sequential(
+        OrderedDict(
+            [
+                ('projection', nn.Linear(attention_size, 1, bias=False)),
+                ('squeeze', Squeeze()), ('softmax', nn.Softmax(dim=1))
+            ]
+        )
+    ).to(DEVICE)
