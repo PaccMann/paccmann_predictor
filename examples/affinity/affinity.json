@@ -1,0 +1,17 @@
+{
+    "augment_smiles": false,
+    "smiles_canonical": false,
+    "smiles_start_stop_token": true,
+    "smiles_padding_length": 1024,
+    "protein_padding_length": 8192,
+    "dense_hidden_sizes": [
+        20
+    ],
+    "activation_fn": "relu",
+    "dropout": 0.3,
+    "batch_norm": true,
+    "batch_size": 512,
+    "lr": 0.001,
+    "epochs": 200,
+    "save_model": 25
+}

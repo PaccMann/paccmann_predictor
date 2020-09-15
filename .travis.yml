@@ -3,10 +3,13 @@ services:
   - docker
 before_script:
   - docker pull drugilsberg/rdkit-ubuntu:latest
-  - docker build -f .travis/Dockerfile -t predictor .
+  - docker build -f .travis/IC50/Dockerfile -t predictor_ic50 .
+  - docker build -f .travis/affinity/Dockerfile -t predictor_affinity .
 script:
-  - docker run -it predictor python3 -c "import paccmann_predictor"
-  - docker run -it predictor python3 examples/train_paccmann.py -h
+  - docker run -it predictor_ic50 python3 -c "import paccmann_predictor"
+  - docker run -it predictor_ic50 python3 examples/IC50/train_paccmann.py -h
+  - docker run -it predictor_affinity python3 -c "import paccmann_predictor"
+  - docker run -it predictor_affinity python3 examples/affinity/train_affinity.py -h
 notifications:
   slack:
     secure: f0mxXDXxXGtJ8/qpp2IRYKtaP3fG69fIVNY3MsVneTnmLXFvi48/Emvd1tb7kG1sQeuvI7wWukwC+3iCQ70x3T8it6kHgS6IDusTzJb5vDXsP1jTVHprH8FQZCWs6wt7ZYQhRVIYRlAWlu5KeG3iiWXyW8hDiHZYhikEijqD9v93YfqUnWykJAjfMHSOLyrHw164fhKOPsv60YuyX/wzMryoap4B14/EFHw7EsjiPVC0ZLZ9PVqEZtTdFptuOjdba49ERCwY4bpfk2VoAfnxY3oTrkR7fnZAQ2XXJGL9RXKvKg0ZY/S1VYhyaEAoxru7ZAOyYiNNc4pNjvMH2dWA3MeVBgZV4+bsf9vapBibGYuZrUiPi2ovLoQvyMdruG2YKvAf1BmcoYUQ8/T/GUQnC5EFHJ8yf7vzGjh20HiNcVFvCJC06hL5znbNCdzRWyufqTB8sabZx4XNc0EmsJZs5dcmgX7K02++CF8CNKH1eP6/oZQRI+09UbgrniXfyGBRLo5VL4KcNrwXIka1ZaPOSMDq4a+6PYtiCe1JUukl6rkWzZda6NzQxknj3PjvnVFoVxtLoP/lRn+DxmyGDJBZh/qG+lvT56gBhrDpaRFSUiPQiRIh1P1LAFUSMqxyyFqPluFSSyay/s8z9kujGebjUiVam3QQqlMdj5HqxoeOW6I=
