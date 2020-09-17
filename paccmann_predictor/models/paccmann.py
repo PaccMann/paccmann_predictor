@@ -165,7 +165,7 @@ class MCA(nn.Module):
 
         self.context_attention_layers = nn.Sequential(OrderedDict([
             (
-                f'context_attention_{layer}',
+                f'context_attention_{layer}_head_{head}',
                 ContextAttentionLayer(
                     smiles_hidden_sizes[layer],
                     42,  # Can be anything since context is only 1D (omic)
@@ -176,6 +176,7 @@ class MCA(nn.Module):
                     )
                 )
             ) for layer in range(len(self.multiheads))
+            for head in range(self.multiheads[layer])
             ]))  # yapf: disable
 
         # Only applied if params['batch_norm'] = True
@@ -224,7 +225,6 @@ class MCA(nn.Module):
             predictions is IC50 drug sensitivity prediction of shape `[bs, 1]`.
             prediction_dict includes the prediction and attention weights.
         """
-
         embedded_smiles = self.smiles_embedding(smiles.to(dtype=torch.int64))
 
         # Gene attention weights
@@ -241,13 +241,16 @@ class MCA(nn.Module):
         ]
 
         # NOTE: SMILES Attention mechanism
-        encodings, smiles_alphas = zip(
-            *[
-                layer(reference, torch.unsqueeze(encoded_genes, 1))
-                for layer, reference in
-                zip(self.context_attention_layers, encoded_smiles)
-            ]
-        )
+        encodings, smiles_alphas = [], []
+        context = torch.unsqueeze(encoded_genes, 1)
+        for layer in range(len(self.multiheads)):
+            for head in range(self.multiheads[layer]):
+                ind = self.multiheads[0] * layer + head
+                e, a = self.context_attention_layers[ind](
+                    encoded_smiles[layer], context
+                )
+                encodings.append(e)
+                smiles_alphas.append(a)
 
         encodings = torch.cat(encodings, dim=1)
         if self.params.get('gene_to_dense', False):
