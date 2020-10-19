@@ -10,15 +10,17 @@ DEVICE = get_device()
 
 
 def dense_layer(
-    input_size, hidden_size, act_fn=nn.ReLU(), batch_norm=False, dropout=0.
+    input_size, hidden_size, act_fn=nn.ReLU(), batch_norm=False, dropout=0.0
 ):
     return nn.Sequential(
         OrderedDict(
             [
                 ('projection', nn.Linear(input_size, hidden_size)),
                 (
-                    'batch_norm', nn.BatchNorm1d(hidden_size)
-                    if batch_norm else nn.Identity()
+                    'batch_norm',
+                    nn.BatchNorm1d(hidden_size)
+                    if batch_norm
+                    else nn.Identity(),
                 ),
                 ('act_fn', act_fn),
                 ('dropout', nn.Dropout(p=dropout)),
@@ -28,7 +30,7 @@ def dense_layer(
 
 
 def dense_attention_layer(
-    number_of_features: int, temperature: float = 1., dropout=0.
+    number_of_features: int, temperature: float = 1.0, dropout=0.0
 ) -> nn.Sequential:
     """Attention mechanism layer for dense inputs.
 
@@ -46,7 +48,7 @@ def dense_attention_layer(
                 ('dense', nn.Linear(number_of_features, number_of_features)),
                 ('dropout', nn.Dropout(p=dropout)),
                 ('temperature', Temperature(temperature)),
-                ('softmax', nn.Softmax(dim=-1))
+                ('softmax', nn.Softmax(dim=-1)),
             ]
         )
     )
@@ -57,8 +59,8 @@ def convolutional_layer(
     kernel_size,
     act_fn=nn.ReLU(),
     batch_norm=False,
-    dropout=0.,
-    input_channels=1
+    dropout=0.0,
+    input_channels=1,
 ):
     """Convolutional layer.
 
@@ -82,16 +84,16 @@ def convolutional_layer(
                         input_channels,  # channel_in
                         num_kernel,  # channel_out
                         kernel_size,  # kernel_size
-                        padding=[kernel_size[0] // 2, 0]  # pad for valid conv.
-                    )
+                        padding=[kernel_size[0] // 2, 0],  # pad for valid conv.
+                    ),
                 ),
                 ('squeeze', Squeeze()),
                 ('act_fn', act_fn),
                 ('dropout', nn.Dropout(p=dropout)),
                 (
                     'batch_norm',
-                    nn.BatchNorm1d(num_kernel) if batch_norm else nn.Identity()
-                )
+                    nn.BatchNorm1d(num_kernel) if batch_norm else nn.Identity(),
+                ),
             ]
         )
     )
@@ -114,7 +116,8 @@ class ContextAttentionLayer(nn.Module):
         context_hidden_size: int,
         context_sequence_length: int = 1,
         attention_size: int = 16,
-        individual_nonlinearity: type = nn.Sequential()
+        individual_nonlinearity: type = nn.Sequential(),
+        temperature: float = 1.0,
     ):
         """Constructor
         Arguments:
@@ -134,6 +137,9 @@ class ContextAttentionLayer(nn.Module):
                 nonlinearity applied to each projection. Defaults to
                 nn.Sequential(), i.e. no nonlinearity. Otherwise it expects a
                 torch.nn activation function, e.g. nn.ReLU().
+            temperature (float): Temperature parameter to smooth or sharpen the
+                softmax. Defaults to 1. Temperature > 1 flattens the
+                distribution, temperature below 1 makes it spikier.
         """
         super().__init__()
 
@@ -143,31 +149,50 @@ class ContextAttentionLayer(nn.Module):
         self.context_hidden_size = context_hidden_size
         self.attention_size = attention_size
         self.individual_nonlinearity = individual_nonlinearity
+        self.temperature = temperature
 
         # Project the reference into the attention space
-        self.reference_projection = nn.Sequential(OrderedDict([
-            ('projection', nn.Linear(reference_hidden_size, attention_size)),
-            ('act_fn', individual_nonlinearity)
-        ]))  # yapf: disable
+        self.reference_projection = nn.Sequential(
+            OrderedDict(
+                [
+                    (
+                        'projection',
+                        nn.Linear(reference_hidden_size, attention_size),
+                    ),
+                    ('act_fn', individual_nonlinearity),
+                ]
+            )
+        )  # yapf: disable
 
         # Project the context into the attention space
-        self.context_projection = nn.Sequential(OrderedDict([
-            ('projection', nn.Linear(context_hidden_size, attention_size)),
-            ('act_fn', individual_nonlinearity)
-        ]))  # yapf: disable
+        self.context_projection = nn.Sequential(
+            OrderedDict(
+                [
+                    (
+                        'projection',
+                        nn.Linear(context_hidden_size, attention_size),
+                    ),
+                    ('act_fn', individual_nonlinearity),
+                ]
+            )
+        )  # yapf: disable
 
         # Optionally reduce the hidden size in context
         if context_sequence_length > 1:
-            self.context_hidden_projection = nn.Sequential(OrderedDict([
-                (
-                    'projection',
-                    nn.Linear(
-                        context_sequence_length,
-                        reference_sequence_length
-                    )
-                ),
-                ('act_fn', individual_nonlinearity)
-            ]))  # yapf: disable
+            self.context_hidden_projection = nn.Sequential(
+                OrderedDict(
+                    [
+                        (
+                            'projection',
+                            nn.Linear(
+                                context_sequence_length,
+                                reference_sequence_length,
+                            ),
+                        ),
+                        ('act_fn', individual_nonlinearity),
+                    ]
+                )
+            )  # yapf: disable
         else:
             self.context_hidden_projection = nn.Sequential()
 
@@ -175,7 +200,9 @@ class ContextAttentionLayer(nn.Module):
             OrderedDict(
                 [
                     ('projection', nn.Linear(attention_size, 1, bias=False)),
-                    ('squeeze', Squeeze()), ('softmax', nn.Softmax(dim=1))
+                    ('squeeze', Squeeze()),
+                    ('temperature', Temperature(self.temperature)),
+                    ('softmax', nn.Softmax(dim=1)),
                 ]
             )
         )
@@ -215,7 +242,8 @@ def gene_projection(num_genes, attention_size, ind_nonlin=nn.Sequential()):
         OrderedDict(
             [
                 ('projection', nn.Linear(num_genes, attention_size)),
-                ('act_fn', ind_nonlin), ('expand', Unsqueeze(1))
+                ('act_fn', ind_nonlin),
+                ('expand', Unsqueeze(1)),
             ]
         )
     ).to(DEVICE)
@@ -228,7 +256,7 @@ def smiles_projection(
         OrderedDict(
             [
                 ('projection', nn.Linear(smiles_hidden_size, attention_size)),
-                ('act_fn', ind_nonlin)
+                ('act_fn', ind_nonlin),
             ]
         )
     ).to(DEVICE)
@@ -239,7 +267,8 @@ def alpha_projection(attention_size):
         OrderedDict(
             [
                 ('projection', nn.Linear(attention_size, 1, bias=False)),
-                ('squeeze', Squeeze()), ('softmax', nn.Softmax(dim=1))
+                ('squeeze', Squeeze()),
+                ('softmax', nn.Softmax(dim=1)),
             ]
         )
     ).to(DEVICE)

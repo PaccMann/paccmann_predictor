@@ -7,8 +7,11 @@ from pytoda.smiles.transforms import AugmentTensor
 
 from ..utils.hyperparams import ACTIVATION_FN_FACTORY, LOSS_FN_FACTORY
 from ..utils.interpret import monte_carlo_dropout, test_time_augmentation
-from ..utils.layers import (ContextAttentionLayer, convolutional_layer,
-                            dense_layer)
+from ..utils.layers import (
+    ContextAttentionLayer,
+    convolutional_layer,
+    dense_layer,
+)
 from ..utils.utils import get_device
 
 
@@ -66,11 +69,11 @@ class BimodalMCA(nn.Module):
                 smiles sequence. Defaults to 16.
             protein_attention_size (int): size of the attentive layer for the
                 protein sequence. Defaults to 16.
-            dense_hidden_sizes (list[int]): Sizes of the hidden dense layers. 
+            dense_hidden_sizes (list[int]): Sizes of the hidden dense layers.
                 Defaults to [20].
             final_activation: (bool): Whether a (sigmoid) activation function
                 is used in the final layer. Defaults to False.
-    """
+        """
 
         super(BimodalMCA, self).__init__(*args, **kwargs)
 
@@ -90,41 +93,44 @@ class BimodalMCA(nn.Module):
         ]  # yapf: disable
         self.dropout = params.get('dropout', 0.5)
         self.use_batch_norm = params.get('batch_norm', True)
+        self.temperature = params.get('temperature', 1.0)
         self.smiles_embedding_size = params.get('smiles_embedding_size', 32)
         self.protein_embedding_size = params.get('protein_embedding_size', 8)
         self.smiles_filters = params.get('smiles_filters', [32, 32, 32])
         self.protein_filters = params.get('protein_filters', [32, 32, 32])
 
         self.smiles_kernel_sizes = params.get(
-            'smiles_kernel_sizes', [
+            'smiles_kernel_sizes',
+            [
                 [3, self.smiles_embedding_size],
                 [5, self.smiles_embedding_size],
-                [11, self.smiles_embedding_size]
-            ]
-        )  # yapf: disable
+                [11, self.smiles_embedding_size],
+            ],
+        )
         self.protein_kernel_sizes = params.get(
-            'protein_kernel_sizes', [
+            'protein_kernel_sizes',
+            [
                 [3, self.protein_embedding_size],
                 [11, self.protein_embedding_size],
-                [25, self.protein_embedding_size]
-            ]
+                [25, self.protein_embedding_size],
+            ],
         )
 
         self.smiles_attention_size = params.get('smiles_attention_size', 16)
         self.protein_attention_size = params.get('protein_attention_size', 16)
 
-        self.smiles_hidden_sizes = (
-            [self.smiles_embedding_size] + self.smiles_filters
-        )
-        self.protein_hidden_sizes = (
-            [self.protein_embedding_size] + self.protein_filters
-        )
-        self.hidden_sizes = (
-            [
-                self.smiles_embedding_size + sum(self.smiles_filters) +
-                self.protein_embedding_size + sum(self.protein_filters)
-            ] + params.get('dense_hidden_sizes', [20])
-        )
+        self.smiles_hidden_sizes = [
+            self.smiles_embedding_size
+        ] + self.smiles_filter
+        self.protein_hidden_sizes = [
+            self.protein_embedding_size
+        ] + self.protein_filters
+        self.hidden_sizes = [
+            self.smiles_embedding_size
+            + sum(self.smiles_filters)
+            + self.protein_embedding_size
+            + sum(self.protein_filters)
+        ] + params.get('dense_hidden_sizes', [20])
         if self.use_batch_norm:
             self.batch_norm = nn.BatchNorm1d(self.hidden_sizes[0])
 
@@ -148,87 +154,106 @@ class BimodalMCA(nn.Module):
         self.smiles_embedding = nn.Embedding(
             self.params['smiles_vocabulary_size'],
             self.smiles_embedding_size,
-            scale_grad_by_freq=params.get('embed_scale_grad', False)
+            scale_grad_by_freq=params.get('embed_scale_grad', False),
         )
         self.protein_embedding = nn.Embedding(
             self.params['protein_vocabulary_size'],
             self.protein_embedding_size,
-            scale_grad_by_freq=params.get('embed_scale_grad', False)
+            scale_grad_by_freq=params.get('embed_scale_grad', False),
         )
 
         # Convolutions
         # TODO: Use nn.ModuleDict instead of the nn.Seq/OrderedDict
         self.smiles_convolutional_layers = nn.Sequential(
-            OrderedDict([
-                (
-                    f'smiles_convolutional_{index}',
-                    convolutional_layer(
-                        num_kernel,
-                        kernel_size,
-                        act_fn=self.act_fn,
-                        dropout=self.dropout,
-                        batch_norm=self.use_batch_norm
-                    ).to(self.device)
-                ) for index, (num_kernel, kernel_size) in
-                enumerate(zip(self.smiles_filters, self.smiles_kernel_sizes))
-            ])
+            OrderedDict(
+                [
+                    (
+                        f'smiles_convolutional_{index}',
+                        convolutional_layer(
+                            num_kernel,
+                            kernel_size,
+                            act_fn=self.act_fn,
+                            dropout=self.dropout,
+                            batch_norm=self.use_batch_norm,
+                        ).to(self.device),
+                    )
+                    for index, (num_kernel, kernel_size) in enumerate(
+                        zip(self.smiles_filters, self.smiles_kernel_sizes)
+                    )
+                ]
+            )
         )  # yapf: disable
 
         self.protein_convolutional_layers = nn.Sequential(
-            OrderedDict([
-                (
-                    f'protein_convolutional_{index}',
-                    convolutional_layer(
-                        num_kernel,
-                        kernel_size,
-                        act_fn=self.act_fn,
-                        dropout=self.dropout,
-                        batch_norm=self.use_batch_norm
-                    ).to(self.device)
-                ) for index, (num_kernel, kernel_size) in
-                enumerate(zip(self.protein_filters, self.protein_kernel_sizes))
-            ])
+            OrderedDict(
+                [
+                    (
+                        f'protein_convolutional_{index}',
+                        convolutional_layer(
+                            num_kernel,
+                            kernel_size,
+                            act_fn=self.act_fn,
+                            dropout=self.dropout,
+                            batch_norm=self.use_batch_norm,
+                        ).to(self.device),
+                    )
+                    for index, (num_kernel, kernel_size) in enumerate(
+                        zip(self.protein_filters, self.protein_kernel_sizes)
+                    )
+                ]
+            )
         )  # yapf: disable
 
         # Context attention
         self.context_attention_smiles_layers = nn.Sequential(
-            OrderedDict([
-                (
-                    f'context_attention_smiles_{layer}',
-                    ContextAttentionLayer(
-                        self.smiles_hidden_sizes[layer],
-                        self.params['smiles_padding_length'],
-                        self.protein_hidden_sizes[layer],
-                        context_sequence_length=self.protein_padding_length,
-                        attention_size=self.smiles_attention_size,
-                        individual_nonlinearity=params.get(
-                            'context_nonlinearity', nn.Sequential()
-                        )
+            OrderedDict(
+                [
+                    (
+                        f'context_attention_smiles_{layer}',
+                        ContextAttentionLayer(
+                            self.smiles_hidden_sizes[layer],
+                            self.params['smiles_padding_length'],
+                            self.protein_hidden_sizes[layer],
+                            context_sequence_length=(
+                                self.protein_padding_length
+                            ),
+                            attention_size=self.smiles_attention_size,
+                            individual_nonlinearity=params.get(
+                                'context_nonlinearity', nn.Sequential()
+                            ),
+                            temperature=self.temperature,
+                        ),
                     )
-                ) for layer in range(len(self.smiles_filters) + 1)
-            ])
-        )  # yapf: disable
+                    for layer in range(len(self.smiles_filters) + 1)
+                ]
+            )
+        )
 
         self.context_attention_protein_layers = nn.Sequential(
-            OrderedDict([
-                (
-                    f'context_attention_protein_{layer}',
-                    ContextAttentionLayer(
-                        self.protein_hidden_sizes[layer],
-                        self.params['protein_padding_length'],
-                        self.smiles_hidden_sizes[layer],
-                        context_sequence_length=self.smiles_padding_length,
-                        attention_size=self.protein_attention_size,
-                        individual_nonlinearity=params.get(
-                            'context_nonlinearity', nn.Sequential()
-                        )
+            OrderedDict(
+                [
+                    (
+                        f'context_attention_protein_{layer}',
+                        ContextAttentionLayer(
+                            self.protein_hidden_sizes[layer],
+                            self.params['protein_padding_length'],
+                            self.smiles_hidden_sizes[layer],
+                            context_sequence_length=self.smiles_padding_length,
+                            attention_size=self.protein_attention_size,
+                            individual_nonlinearity=params.get(
+                                'context_nonlinearity', nn.Sequential()
+                            ),
+                            temperature=self.temperature,
+                        ),
                     )
-                ) for layer in range(len(self.protein_filters) + 1)
-            ])
-        )  # yapf: disable
+                    for layer in range(len(self.protein_filters) + 1)
+                ]
+            )
+        )
 
         self.dense_layers = nn.Sequential(
-            OrderedDict([
+            OrderedDict(
+                [
                     (
                         f'dense_{ind}',
                         dense_layer(
@@ -236,11 +261,13 @@ class BimodalMCA(nn.Module):
                             self.hidden_sizes[ind + 1],
                             act_fn=self.act_fn,
                             dropout=self.dropout,
-                            batch_norm=self.use_batch_norm
-                        ).to(self.device)
-                    ) for ind in range(len(self.hidden_sizes) - 1)
-            ])
-        )  # yapf: disable
+                            batch_norm=self.use_batch_norm,
+                        ).to(self.device),
+                    )
+                    for ind in range(len(self.hidden_sizes) - 1)
+                ]
+            )
+        )
 
         self.final_dense = nn.Linear(self.hidden_sizes[-1], 1)
         if params.get('final_activation', True):
@@ -280,22 +307,26 @@ class BimodalMCA(nn.Module):
             for layer in self.protein_convolutional_layers
         ]
 
-        #Context attention on SMILES
+        # Context attention on SMILES
         smiles_encodings, smiles_alphas = zip(
             *[
-                layer(reference, context) for layer, reference, context in zip(
-                    self.context_attention_smiles_layers, encoded_smiles,
-                    encoded_protein
+                layer(reference, context)
+                for layer, reference, context in zip(
+                    self.context_attention_smiles_layers,
+                    encoded_smiles,
+                    encoded_protein,
                 )
             ]
         )
 
-        #Context attention on Protein
+        # Context attention on Protein
         protein_encodings, protein_alphas = zip(
             *[
-                layer(reference, context) for layer, reference, context in zip(
-                    self.context_attention_protein_layers, encoded_protein,
-                    encoded_smiles
+                layer(reference, context)
+                for layer, reference, context in zip(
+                    self.context_attention_protein_layers,
+                    encoded_protein,
+                    encoded_smiles,
                 )
             ]
         )
@@ -304,9 +335,9 @@ class BimodalMCA(nn.Module):
         encodings = torch.cat(
             [
                 torch.cat(smiles_encodings, dim=1),
-                torch.cat(protein_encodings, dim=1)
+                torch.cat(protein_encodings, dim=1),
             ],
-            dim=1
+            dim=1,
         )
 
         # Apply batch normalization if specified
@@ -324,18 +355,20 @@ class BimodalMCA(nn.Module):
                 torch.cat(
                     [torch.unsqueeze(p, -1) for p in smiles_alphas], dim=-1
                 ),
-                dim=-1
+                dim=-1,
             )
             protein_attention_weights = torch.mean(
                 torch.cat(
                     [torch.unsqueeze(p, -1) for p in protein_alphas], dim=-1
                 ),
-                dim=-1
+                dim=-1,
             )
-            prediction_dict.update({
-                'smiles_attention': smiles_attention_weights,
-                'protein_attention': protein_attention_weights
-            })  # yapf: disable
+            prediction_dict.update(
+                {
+                    'smiles_attention': smiles_attention_weights,
+                    'protein_attention': protein_attention_weights,
+                }
+            )  # yapf: disable
 
             if confidence:
                 augmenter = AugmentTensor(self.smiles_language)
@@ -343,7 +376,7 @@ class BimodalMCA(nn.Module):
                     self,
                     regime='tensors',
                     tensors=(smiles, proteins),
-                    repetitions=5
+                    repetitions=5,
                 )
                 aleatoric_conf = test_time_augmentation(
                     self,
@@ -351,13 +384,15 @@ class BimodalMCA(nn.Module):
                     tensors=(smiles, proteins),
                     repetitions=5,
                     augmenter=augmenter,
-                    tensors_to_augment=0
+                    tensors_to_augment=0,
                 )
 
-                prediction_dict.update({
-                    'epistemic_confidence': epistemic_conf,
-                    'aleatoric_confidence': aleatoric_conf
-                })  # yapf: disable
+                prediction_dict.update(
+                    {
+                        'epistemic_confidence': epistemic_conf,
+                        'aleatoric_confidence': aleatoric_conf,
+                    }
+                )  # yapf: disable
 
         return predictions, prediction_dict
 
