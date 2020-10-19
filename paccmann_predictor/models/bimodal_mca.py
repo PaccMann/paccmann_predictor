@@ -121,7 +121,7 @@ class BimodalMCA(nn.Module):
 
         self.smiles_hidden_sizes = [
             self.smiles_embedding_size
-        ] + self.smiles_filter
+        ] + self.smiles_filters
         self.protein_hidden_sizes = [
             self.protein_embedding_size
         ] + self.protein_filters
