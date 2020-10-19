@@ -10,7 +10,10 @@ from time import time
 import numpy as np
 import torch
 from sklearn.metrics import (
-    auc, average_precision_score, precision_recall_curve, roc_curve
+    auc,
+    average_precision_score,
+    precision_recall_curve,
+    roc_curve,
 )
 from paccmann_predictor.models import MODEL_FACTORY
 from paccmann_predictor.utils.hyperparams import OPTIMIZER_FACTORY
@@ -60,14 +63,19 @@ parser.add_argument(
     'training_name', type=str,
     help='Name for the training.'
 )
-
 # yapf: enable
 
 
 def main(
-    train_affinity_filepath, test_affinity_filepath, protein_filepath,
-    smi_filepath, smiles_language_filepath, protein_language_filepath,
-    model_path, params_filepath, training_name
+    train_affinity_filepath,
+    test_affinity_filepath,
+    protein_filepath,
+    smi_filepath,
+    smiles_language_filepath,
+    protein_language_filepath,
+    model_path,
+    params_filepath,
+    training_name,
 ):
 
     logger = logging.getLogger(f'{training_name}')
@@ -116,14 +124,14 @@ def main(
         protein_augment_by_revert=params.get('protein_augment', False),
         device=device,
         drug_affinity_dtype=torch.float,
-        backend='eager'
+        backend='eager',
     )
     train_loader = torch.utils.data.DataLoader(
         dataset=train_dataset,
         batch_size=params['batch_size'],
         shuffle=True,
         drop_last=True,
-        num_workers=params.get('num_workers', 0)
+        num_workers=params.get('num_workers', 0),
     )
 
     test_dataset = DrugAffinityDataset(
@@ -136,7 +144,7 @@ def main(
         smiles_padding_length=params.get('smiles_padding_length', None),
         smiles_add_start_and_stop=params.get('smiles_add_start_stop', True),
         smiles_augment=False,
-        smiles_canonical=params.get('smiles_canonical', False),
+        smiles_canonical=params.get('smiles_test_canonical', False),
         smiles_kekulize=params.get('smiles_kekulize', False),
         smiles_all_bonds_explicit=params.get('smiles_bonds_explicit', False),
         smiles_all_hs_explicit=params.get('smiles_all_hs_explicit', False),
@@ -150,14 +158,14 @@ def main(
         protein_augment_by_revert=False,
         device=device,
         drug_affinity_dtype=torch.float,
-        backend='eager'
+        backend='eager',
     )
     test_loader = torch.utils.data.DataLoader(
         dataset=test_dataset,
         batch_size=params['batch_size'],
         shuffle=True,
         drop_last=True,
-        num_workers=params.get('num_workers', 0)
+        num_workers=params.get('num_workers', 0),
     )
     logger.info(
         f'Training dataset has {len(train_dataset)} samples, test set has '
@@ -169,10 +177,12 @@ def main(
         f'model is {device}'
     )
     save_top_model = os.path.join(model_dir, 'weights/{}_{}_{}.pt')
-    params.update({
-        'smiles_vocabulary_size': smiles_language.number_of_tokens,
-        'protein_vocabulary_size': protein_language.number_of_tokens
-    })  # yapf: disable
+    params.update(
+        {
+            'smiles_vocabulary_size': smiles_language.number_of_tokens,
+            'protein_vocabulary_size': protein_language.number_of_tokens,
+        }
+    )
 
     model_fn = params.get('model_fn', 'bimodal_mca')
     model = MODEL_FACTORY[model_fn](params).to(device)
@@ -184,9 +194,7 @@ def main(
         try:
             model.load(os.path.join(model_dir, 'weights', 'best_mca.pt'))
 
-            with open(
-                os.path.join(model_dir, 'results', 'mse.json'), 'r'
-            ) as f:
+            with open(os.path.join(model_dir, 'results', 'mse.json'), 'r') as f:
                 info = json.load(f)
 
                 max_roc_auc = info['best_roc_auc']
@@ -198,9 +206,8 @@ def main(
         min_loss, max_roc_auc = 100, 0
 
     # Define optimizer
-    optimizer = (
-        OPTIMIZER_FACTORY[params.get('optimizer', 'adam')]
-        (model.parameters(), lr=params.get('lr', 0.001))
+    optimizer = OPTIMIZER_FACTORY[params.get('optimizer', 'adam')](
+        model.parameters(), lr=params.get('lr', 0.001)
     )
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     params.update({'number_of_parameters': num_params})
@@ -250,9 +257,7 @@ def main(
             predictions = []
             labels = []
             for ind, (smiles, proteins, y) in enumerate(test_loader):
-                y_hat, pred_dict = model(
-                    smiles.to(device), proteins.to(device)
-                )
+                y_hat, pred_dict = model(smiles.to(device), proteins.to(device))
                 predictions.append(y_hat)
                 labels.append(y.clone())
                 loss = model.loss(y_hat, y.to(device))
@@ -280,7 +285,7 @@ def main(
             model.save(path.format(typ, metric, model_fn))
             info = {
                 'best_roc_auc': str(max_roc_auc),
-                'test_loss': str(min_loss)
+                'test_loss': str(min_loss),
             }
             with open(
                 os.path.join(model_dir, 'results', metric + '.json'), 'w'
@@ -288,7 +293,7 @@ def main(
                 json.dump(info, f)
             np.save(
                 os.path.join(model_dir, 'results', metric + '_preds.npy'),
-                np.vstack([predictions, labels])
+                np.vstack([predictions, labels]),
             )
             if typ == 'best':
                 logger.info(
@@ -325,8 +330,13 @@ if __name__ == '__main__':
     args = parser.parse_args()
     # run the training
     main(
-        args.train_affinity_filepath, args.test_affinity_filepath,
-        args.protein_filepath, args.smi_filepath,
-        args.smiles_language_filepath, args.protein_language_filepath,
-        args.model_path, args.params_filepath, args.training_name
+        args.train_affinity_filepath,
+        args.test_affinity_filepath,
+        args.protein_filepath,
+        args.smi_filepath,
+        args.smiles_language_filepath,
+        args.protein_language_filepath,
+        args.model_path,
+        args.params_filepath,
+        args.training_name,
     )
