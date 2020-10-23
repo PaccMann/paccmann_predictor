@@ -13,6 +13,7 @@ from pytoda.files import read_smi
 from pytoda.proteins.protein_language import ProteinLanguage
 from pytoda.smiles.smiles_language import SMILESLanguage
 from pytoda.transforms import LeftPadding, ToTensor
+from pytoda.datasets import SMILESDataset
 
 # setup logging
 logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
@@ -93,35 +94,40 @@ def main(
 
     # Transforms
     to_tensor = ToTensor()
-    pad_ligand = LeftPadding(model.smiles_padding_length, smiles_language.padding_index)
     pad_seq = LeftPadding(model.protein_padding_length, protein_language.padding_index)
 
     # Read data
     sequences = read_smi(protein_filepath, names=['Sequence'], index_col=0)
     ligands = read_smi(smi_filepath)
 
-    smiles = torch.stack(
-        [
-            to_tensor(pad_ligand(smiles_language.smiles_to_token_indexes(x)))
-            for x in ligands['SMILES']
-        ]
+    smiles_data = SMILESDataset(
+        smi_filepath,
+        smiles_language=smiles_language,
+        padding_length=model.smiles_padding_length,
+    )
+    smiles_loader = torch.utils.data.DataLoader(
+        smiles_data,
+        batch_size=256,
+        drop_last=False,
+        num_workers=0,
     )
 
     for idx, (sequence_id, row) in enumerate(sequences.iterrows()):
         logger.info(f'Target {idx+1}/{len(sequences)}: {sequence_id}')
-        proteins = (
-            to_tensor(
-                pad_seq(protein_language.sequence_to_token_indexes(row['Sequence']))
-            )
-            .unsqueeze(0)
-            .repeat(len(ligands), 1)
+
+        proteins = to_tensor(
+            pad_seq(protein_language.sequence_to_token_indexes(row['Sequence']))
+        ).unsqueeze(0)
+
+        target_preds = []
+        for smiles_batch in smiles_loader:
+            protein_batch = proteins.repeat(len(smiles_batch), 1)
+            preds, pred_dict = model(smiles_batch, protein_batch)
+            target_preds.extend(preds.detach().squeeze().tolist())
+
+        pd.DataFrame({'SMILES': ligands['SMILES'], 'affinity': target_preds}).to_csv(
+            os.path.join(output_folder, f'{sequence_id}.csv'), index=False
         )
-
-        preds, pred_dict = model(smiles, proteins)
-
-        pd.DataFrame(
-            {'SMILES': ligands['SMILES'], 'affinity': preds.detach().numpy().squeeze()}
-        ).to_csv(os.path.join(output_folder, f'{sequence_id}.csv'), index=False)
 
         # Free memory
         del preds, pred_dict
