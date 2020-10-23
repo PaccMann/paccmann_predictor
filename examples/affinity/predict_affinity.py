@@ -97,7 +97,7 @@ def main(
     pad_seq = LeftPadding(model.protein_padding_length, protein_language.padding_index)
 
     # Read data
-    sequences = read_smi(protein_filepath, names=['Sequence'], index_col=0)
+    sequences = read_smi(protein_filepath, names=['Sequence'])
     ligands = read_smi(smi_filepath)
 
     smiles_data = SMILESDataset(
