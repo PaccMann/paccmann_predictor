@@ -104,12 +104,10 @@ def main(
         smi_filepath,
         smiles_language=smiles_language,
         padding_length=model.smiles_padding_length,
+        sanitize=False,
     )
     smiles_loader = torch.utils.data.DataLoader(
-        smiles_data,
-        batch_size=256,
-        drop_last=False,
-        num_workers=0,
+        smiles_data, batch_size=256, drop_last=False, num_workers=0, shuffle=False
     )
 
     for idx, (sequence_id, row) in enumerate(sequences.iterrows()):
