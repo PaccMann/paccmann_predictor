@@ -20,7 +20,7 @@ from paccmann_predictor.utils.hyperparams import OPTIMIZER_FACTORY
 from paccmann_predictor.utils.utils import get_device
 from pytoda.datasets import DrugAffinityDataset
 from pytoda.proteins.protein_language import ProteinLanguage
-from pytoda.smiles.smiles_language import SMILESLanguage
+from pytoda.smiles.smiles_language import SMILESTokenizer
 
 # setup logging
 logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
@@ -96,7 +96,6 @@ def main(
     device = get_device()
 
     # Load languages
-    smiles_language = SMILESLanguage.load(smiles_language_filepath)
     protein_language = ProteinLanguage.load(protein_language_filepath)
 
     # Assemble datasets
@@ -104,8 +103,8 @@ def main(
         drug_affinity_filepath=train_affinity_filepath,
         smi_filepath=smi_filepath,
         protein_filepath=protein_filepath,
-        smiles_language=smiles_language,
         protein_language=protein_language,
+        smiles_vocab_file=smiles_language_filepath,
         smiles_padding=params.get('smiles_padding', True),
         smiles_padding_length=params.get('smiles_padding_length', None),
         smiles_add_start_and_stop=params.get('smiles_add_start_stop', True),
@@ -125,6 +124,7 @@ def main(
         device=device,
         drug_affinity_dtype=torch.float,
         backend='eager',
+        iterate_dataset=params.get('iterate_dataset', False),
     )
     train_loader = torch.utils.data.DataLoader(
         dataset=train_dataset,
@@ -138,8 +138,8 @@ def main(
         drug_affinity_filepath=test_affinity_filepath,
         smi_filepath=smi_filepath,
         protein_filepath=protein_filepath,
-        smiles_language=smiles_language,
         protein_language=protein_language,
+        smiles_vocab_file=smiles_language_filepath,
         smiles_padding=params.get('smiles_padding', True),
         smiles_padding_length=params.get('smiles_padding_length', None),
         smiles_add_start_and_stop=params.get('smiles_add_start_stop', True),
@@ -159,6 +159,7 @@ def main(
         device=device,
         drug_affinity_dtype=torch.float,
         backend='eager',
+        iterate_dataset=params.get('iterate_dataset', False),
     )
     test_loader = torch.utils.data.DataLoader(
         dataset=test_dataset,
@@ -179,15 +180,15 @@ def main(
     save_top_model = os.path.join(model_dir, 'weights/{}_{}_{}.pt')
     params.update(
         {
-            'smiles_vocabulary_size': smiles_language.number_of_tokens,
+            'smiles_vocabulary_size': (
+                train_dataset.smiles_dataset.smiles_language.number_of_tokens
+            ),
             'protein_vocabulary_size': protein_language.number_of_tokens,
         }
     )
 
     model_fn = params.get('model_fn', 'bimodal_mca')
     model = MODEL_FACTORY[model_fn](params).to(device)
-    model._associate_language(smiles_language)
-    model._associate_language(protein_language)
 
     if os.path.isfile(os.path.join(model_dir, 'weights', 'best_mca.pt')):
         logger.info('Found existing model, restoring now...')
@@ -287,9 +288,7 @@ def main(
                 'best_roc_auc': str(max_roc_auc),
                 'test_loss': str(min_loss),
             }
-            with open(
-                os.path.join(model_dir, 'results', metric + '.json'), 'w'
-            ) as f:
+            with open(os.path.join(model_dir, 'results', metric + '.json'), 'w') as f:
                 json.dump(info, f)
             np.save(
                 os.path.join(model_dir, 'results', metric + '_preds.npy'),
