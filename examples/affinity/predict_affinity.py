@@ -122,9 +122,9 @@ def main(
             protein_batch = proteins.repeat(len(smiles_batch), 1)
             preds, pred_dict = model(smiles_batch, protein_batch)
             target_preds.extend(preds.detach().squeeze().tolist())
-
+        save_name = sequence_id.strip().replace(' ', '_').replace('\\', '_').replace('/', '_').replace('=','_')
         pd.DataFrame({'SMILES': ligands['SMILES'], 'affinity': target_preds}).to_csv(
-            os.path.join(output_folder, f'{sequence_id}.csv'), index=False
+            os.path.join(output_folder, f'{save_name}.csv'), index=False
         )
 
         # Free memory
