@@ -20,7 +20,6 @@ from paccmann_predictor.utils.hyperparams import OPTIMIZER_FACTORY
 from paccmann_predictor.utils.utils import get_device
 from pytoda.datasets import DrugAffinityDataset
 from pytoda.proteins.protein_language import ProteinLanguage
-from pytoda.smiles.smiles_language import SMILESTokenizer
 
 # setup logging
 logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
