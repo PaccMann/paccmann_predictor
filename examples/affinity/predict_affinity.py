@@ -14,9 +14,14 @@ from pytoda.proteins.protein_language import ProteinLanguage
 from pytoda.smiles.smiles_language import SMILESTokenizer
 from pytoda.transforms import LeftPadding, ToTensor
 from pytoda.datasets import SMILESTokenizerDataset
+from paccmann_predictor.utils.interpret import (
+    monte_carlo_dropout,
+    test_time_augmentation,
+)
+from pytoda.smiles.transforms import AugmentTensor
 
 # setup logging
-logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
+logging.basicConfig(stream=sys.stdout, level=logging.INFO)
 
 # yapf: disable
 parser = argparse.ArgumentParser()
@@ -52,6 +57,10 @@ parser.add_argument(
     '-l', '--label_filepath', type=str, default=None, required=False,
     help='Optional path to a file with labels'
 )
+parser.add_argument(
+    '-c', '--confidence', action='store_true',
+    help='Whether or not confidence predictions should be performed'
+)
 # yapf: enable
 
 
@@ -64,9 +73,11 @@ def main(
     smiles_language_filepath,
     protein_language_filepath,
     label_filepath,
+    confidence,
 ):
 
     logger = logging.getLogger('affinity_prediction')
+
     # Process parameter file:
     params = {}
     with open(os.path.join(model_path, 'model_params.json'), 'r') as fp:
@@ -76,7 +87,7 @@ def main(
     os.makedirs(output_folder, exist_ok=True)
 
     device = get_device()
-    weights_path = os.path.join(model_path, 'weights', 'best.pt')
+    weights_path = os.path.join(model_path, 'weights', 'best_ROC-AUC_bimodal_mca.pt')
 
     if label_filepath is not None:
         label_df = pd.read_csv(label_filepath, index_col=0)
@@ -101,6 +112,7 @@ def main(
         remove_chirality=params.get('smiles_remove_chirality', False),
         selfies=params.get('selfies', False),
     )
+    augment = AugmentTensor(smiles_language)
 
     model = MODEL_FACTORY[model_id](params).to(device)
 
@@ -108,7 +120,7 @@ def main(
         try:
             model.load(weights_path, map_location=device)
         except Exception:
-            logger.error(f'Error in model restoring from {weights_path}')
+            raise ValueError(f'Error in model restoring from {weights_path}')
     else:
         logger.info(f'Did not find weights at {weights_path}, name weights "best.pt".')
     model.eval()
@@ -118,7 +130,7 @@ def main(
     pad_seq = LeftPadding(model.protein_padding_length, protein_language.padding_index)
 
     # Read data
-    sequences = read_smi(protein_filepath, names=['Sequence'])
+    sequences = read_smi(protein_filepath, names=['Sequence', 'Name'])
     ligands = read_smi(smi_filepath)
 
     smiles_data = SMILESTokenizerDataset(
@@ -136,10 +148,30 @@ def main(
         ).unsqueeze(0)
 
         target_preds = []
+        epi_confs, epi_preds, ale_confs, ale_preds = [], [], [], []
         for sidx, smiles_batch in enumerate(smiles_loader):
             protein_batch = proteins.repeat(len(smiles_batch), 1)
             preds, pred_dict = model(smiles_batch, protein_batch)
             target_preds.extend(preds.detach().squeeze().tolist())
+
+            # Get confidences
+            if confidence:
+
+                ale_conf, ale_pred = test_time_augmentation(
+                    model,
+                    regime='tensors',
+                    tensors=(smiles_batch, protein_batch),
+                    augmenter=augment,
+                    tensors_to_augment=0,
+                )
+                epi_conf, epi_pred = monte_carlo_dropout(
+                    model, regime='tensors', tensors=(smiles_batch, protein_batch)
+                )
+                epi_confs.extend(epi_conf.detach().squeeze().tolist())
+                epi_preds.extend(epi_pred.detach().squeeze().tolist())
+                ale_confs.extend(ale_conf.detach().squeeze().tolist())
+                ale_preds.extend(ale_pred.detach().squeeze().tolist())
+
         save_name = (
             sequence_id.strip()
             .replace(' ', '_')
@@ -148,22 +180,32 @@ def main(
             .replace('=', '_')
         )
         df = pd.DataFrame({'SMILES': ligands['SMILES'], 'affinity': target_preds})
+        if confidence:
+            df['epistemic_confidence'] = epi_confs
+            df['aleatoric_confidence'] = ale_confs
+            df['epistemic_affinity'] = epi_preds
+            df['aleatoric_affinity'] = ale_preds
 
         # Retrieve labels
         if label_filepath is not None:
-            labels = []
+            labels, ligand_names = [], []
             for smiles in ligands['SMILES']:
                 try:
-                    labels.append(
-                        label_df[
-                            (label_df['ligand_name'] == smiles)
-                            & (label_df['sequence_id'] == sequence_id)
-                        ]['label'].values[0]
-                    )
+                    selected_row = label_df[
+                        (
+                            label_df['ligand_name']
+                            == ligands[ligands['SMILES'] == smiles].index[0]
+                        )
+                        & (label_df['sequence_id'] == row['Name'])
+                    ]
+                    labels.append(selected_row['label'].values[0])
+                    ligand_names.append(selected_row['ligand_name'].values[0])
                 except IndexError:
                     labels.append(-1)
-
+                    ligand_names.append(' ')
+            df['ligand_name'] = ligand_names
             df['labels'] = labels
+
         df.to_csv(os.path.join(output_folder, f'{save_name}.csv'), index=False)
 
         # Free memory
@@ -185,4 +227,5 @@ if __name__ == '__main__':
         args.smiles_language_filepath,
         args.protein_language_filepath,
         args.label_filepath,
+        args.confidence,
     )
