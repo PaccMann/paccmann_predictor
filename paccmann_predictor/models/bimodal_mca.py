@@ -14,10 +14,8 @@ from ..utils.layers import (
 )
 from ..utils.utils import get_device
 
-
 class BimodalMCA(nn.Module):
     """Bimodal Multiscale Convolutional Attentive Encoder.
-
     This is based on the MCA model as presented in the publication in
     Molecular Pharmaceutics:
         https://pubs.acs.org/doi/10.1021/acs.molpharmaceut.9b00520.
@@ -25,12 +23,10 @@ class BimodalMCA(nn.Module):
 
     def __init__(self, params, *args, **kwargs):
         """Constructor.
-
         Args:
             params (dict): A dictionary containing the parameter to built the
                 dense encoder.
                 TODO params should become actual arguments (use **params).
-
         Required items in params:
             smiles_padding_length (int): dimension of tokens' embedding.
             smiles_vocabulary_size (int): size of the tokens vocabulary.
@@ -82,11 +78,11 @@ class BimodalMCA(nn.Module):
         self.params = params
         self.smiles_padding_length = params['smiles_padding_length']
         self.protein_padding_length = params['protein_padding_length']
-
+        self.encoding = params['encoding']
         self.loss_fn = LOSS_FN_FACTORY[
             params.get('loss_fn', 'binary_cross_entropy')
         ]  # yapf: disable
-
+        self.peptide_embedding = params['peptide_embedding']
         # Hyperparameter
         self.act_fn = ACTIVATION_FN_FACTORY[
             params.get('activation_fn', 'relu')
@@ -94,19 +90,9 @@ class BimodalMCA(nn.Module):
         self.dropout = params.get('dropout', 0.5)
         self.use_batch_norm = params.get('batch_norm', True)
         self.temperature = params.get('temperature', 1.0)
-        self.smiles_embedding_size = params.get('smiles_embedding_size', 32)
-        self.protein_embedding_size = params.get('protein_embedding_size', 8)
-        self.smiles_filters = params.get('smiles_filters', [32, 32, 32])
-        self.protein_filters = params.get('protein_filters', [32, 32, 32])
 
-        self.smiles_kernel_sizes = params.get(
-            'smiles_kernel_sizes',
-            [
-                [3, self.smiles_embedding_size],
-                [5, self.smiles_embedding_size],
-                [11, self.smiles_embedding_size],
-            ],
-        )
+        self.protein_embedding_size = params.get('protein_embedding_size', 8)
+        self.protein_filters = params.get('protein_filters', [32, 32, 32])
         self.protein_kernel_sizes = params.get(
             'protein_kernel_sizes',
             [
@@ -115,6 +101,28 @@ class BimodalMCA(nn.Module):
                 [25, self.protein_embedding_size],
             ],
         )
+        if self.peptide_embedding == 'smiles':
+            self.smiles_embedding_size = params.get(
+                'smiles_embedding_size', 32
+            )
+            self.smiles_filters = params.get('smiles_filters', [32, 32, 32])
+            if params.get('smiles_embedding', 'learned') == 'learned':
+                kernel_sizes = self.smiles_embedding_size
+            elif params.get('smiles_embedding', 'learned') == 'one_hot':
+                kernel_sizes = params['smiles_vocabulary_size']
+            else:
+                kernel_sizes = self.smiles_embedding_size
+            self.smiles_kernel_sizes = params.get(
+                'smiles_kernel_sizes', [
+                    [3, kernel_sizes],
+                    [5, kernel_sizes],
+                    [11, kernel_sizes]
+                ]
+            )  # yapf: disable
+        else:
+            self.smiles_embedding_size = self.protein_embedding_size
+            self.smiles_filters = self.protein_filters
+            self.smiles_kernel_sizes = self.protein_kernel_sizes
 
         self.smiles_attention_size = params.get('smiles_attention_size', 16)
         self.protein_attention_size = params.get('protein_attention_size', 16)
@@ -126,10 +134,8 @@ class BimodalMCA(nn.Module):
             self.protein_embedding_size
         ] + self.protein_filters
         self.hidden_sizes = [
-            self.smiles_embedding_size
-            + sum(self.smiles_filters)
-            + self.protein_embedding_size
-            + sum(self.protein_filters)
+            self.smiles_embedding_size + sum(self.smiles_filters) +
+            self.protein_embedding_size + sum(self.protein_filters)
         ] + params.get('dense_hidden_sizes', [20])
         if self.use_batch_norm:
             self.batch_norm = nn.BatchNorm1d(self.hidden_sizes[0])
@@ -151,11 +157,48 @@ class BimodalMCA(nn.Module):
             )
         """ Construct model  """
         # Embeddings
-        self.smiles_embedding = nn.Embedding(
-            self.params['smiles_vocabulary_size'],
-            self.smiles_embedding_size,
-            scale_grad_by_freq=params.get('embed_scale_grad', False),
-        )
+        if params.get('smiles_embedding', 'learned') == 'learned':
+            self.smiles_embedding = nn.Embedding(
+                self.params['smiles_vocabulary_size'],
+                self.smiles_embedding_size,
+                scale_grad_by_freq=params.get('embed_scale_grad', False)
+            )
+        elif params.get('smiles_embedding', 'learned') == 'one_hot':
+            self.smiles_embedding = nn.Embedding(
+                self.params['smiles_vocabulary_size'],
+                self.smiles_embedding_size,
+            )
+            # Plug in one hot-vectors and freeze weights
+            self.smiles_embedding.load_state_dict(
+                {
+                    'weight':
+                        torch.nn.functional.one_hot(
+                            torch.arange(
+                                self.params['smiles_vocabulary_size']
+                            )
+                        )
+                }
+            )
+            self.smiles_embedding.weight.requires_grad = False
+
+        elif params.get('smiles_embedding', 'learned') == 'pretrained':
+            # Load the pretrained embeddings
+            try:
+                with open(params['smiles_embedding_path'], 'rb') as f:
+                    embeddings = pickle.load(f)
+            except KeyError:
+                raise KeyError('Path for embeddings is missing in params.')
+
+            # Plug into layer
+            self.smiles_embedding = nn.Embedding(
+                embeddings.shape[0], embeddings.shape[1]
+            )
+            self.smiles_embedding.load_state_dict(
+                {'weight': torch.Tensor(embeddings)}
+            )
+            if params.get('fix_smiles_embeddings', True):
+                self.smiles_embedding.weight.requires_grad = False
+
         self.protein_embedding = nn.Embedding(
             self.params['protein_vocabulary_size'],
             self.protein_embedding_size,
@@ -223,8 +266,7 @@ class BimodalMCA(nn.Module):
                             ),
                             temperature=self.temperature,
                         ),
-                    )
-                    for layer in range(len(self.smiles_filters) + 1)
+                    ) for layer in range(len(self.smiles_filters) + 1)
                 ]
             )
         )
@@ -245,8 +287,7 @@ class BimodalMCA(nn.Module):
                             ),
                             temperature=self.temperature,
                         ),
-                    )
-                    for layer in range(len(self.protein_filters) + 1)
+                    ) for layer in range(len(self.protein_filters) + 1)
                 ]
             )
         )
@@ -263,8 +304,7 @@ class BimodalMCA(nn.Module):
                             dropout=self.dropout,
                             batch_norm=self.use_batch_norm,
                         ).to(self.device),
-                    )
-                    for ind in range(len(self.hidden_sizes) - 1)
+                    ) for ind in range(len(self.hidden_sizes) - 1)
                 ]
             )
         )
@@ -277,7 +317,6 @@ class BimodalMCA(nn.Module):
 
     def forward(self, smiles, proteins, confidence=False):
         """Forward pass through the biomodal MCA.
-
         Args:
             smiles (torch.Tensor): of type int and shape
                 `[bs, smiles_padding_length]`.
@@ -285,17 +324,24 @@ class BimodalMCA(nn.Module):
                 `[bs, protein_padding_length]`.
             confidence (bool, optional) whether the confidence estimates are
                 performed.
-
         Returns:
             (torch.Tensor, torch.Tensor): predictions, prediction_dict
-
             predictions is IC50 drug sensitivity prediction of shape `[bs, 1]`.
             prediction_dict includes the prediction and attention weights.
         """
 
         # Embedding
-        embedded_smiles = self.smiles_embedding(smiles.to(torch.int64))
-        embedded_protein = self.protein_embedding(proteins.to(torch.int64))
+        if self.peptide_embedding == 'smiles':
+            embedded_smiles = self.smiles_embedding(smiles.to(torch.int64))
+        elif self.encoding == 'learned':
+            embedded_smiles = self.protein_embedding(smiles.to(torch.int64))
+        else:
+            embedded_smiles = smiles.to(torch.float)
+
+        if self.encoding == 'learned':
+            embedded_protein = self.protein_embedding(proteins.to(torch.int64))
+        else:
+            embedded_protein = proteins.to(torch.float)
 
         # Convolutions
         encoded_smiles = [embedded_smiles] + [
@@ -310,8 +356,7 @@ class BimodalMCA(nn.Module):
         # Context attention on SMILES
         smiles_encodings, smiles_alphas = zip(
             *[
-                layer(reference, context)
-                for layer, reference, context in zip(
+                layer(reference, context) for layer, reference, context in zip(
                     self.context_attention_smiles_layers,
                     encoded_smiles,
                     encoded_protein,
@@ -322,8 +367,7 @@ class BimodalMCA(nn.Module):
         # Context attention on Protein
         protein_encodings, protein_alphas = zip(
             *[
-                layer(reference, context)
-                for layer, reference, context in zip(
+                layer(reference, context) for layer, reference, context in zip(
                     self.context_attention_protein_layers,
                     encoded_protein,
                     encoded_smiles,
@@ -403,13 +447,11 @@ class BimodalMCA(nn.Module):
         """
         Bind a SMILES or Protein language object to the model.
         Is only used inside the confidence estimation.
-
         Arguments:
             language {Union[
                 pytoda.smiles.smiles_language.SMILESLanguage,
                 pytoda.proteins.protein_langauge.ProteinLanguage
             ]} -- [A SMILES or Protein language object]
-
         Raises:
             TypeError:
         """
