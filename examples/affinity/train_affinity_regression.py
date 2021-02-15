@@ -210,11 +210,12 @@ def main(
 
                 max_pearson = info['best_pearson']
                 min_loss = info['test_loss']
+                min_rmse = info['best_rmse']
 
         except Exception:
-            min_loss, max_pearson = 10000, 0
+            min_loss, max_pearson, min_rmse = 10000, -1, 10000
     else:
-        min_loss, max_pearson = 10000, 0
+        min_loss, max_pearson, min_rmse = 10000, -1, 10000
 
     # Define optimizer
     optimizer = OPTIMIZER_FACTORY[
@@ -249,7 +250,7 @@ def main(
         train_loss = 0
 
         for ind, (smiles, proteins, y) in enumerate(train_loader):
-            if ind % 100 == 0:
+            if ind % 1000 == 0:
                 logger.info(f'Batch {ind}/{len(train_loader)}')
             y_hat, pred_dict = model(smiles, proteins)
             loss = model.loss(y_hat, y.to(device))
