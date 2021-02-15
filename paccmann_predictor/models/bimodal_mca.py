@@ -118,12 +118,11 @@ class BimodalMCA(nn.Module):
 
         if params.get('ligand_embedding', 'learned') == 'one_hot':
             self.ligand_kernel_sizes = params.get(
-                'ligand_kernel_sizes',
-                [
-                    [3, params['ligand_vocabulary_size'],
-                    [5, params['ligand_vocabulary_size'],
-                    [11, params['ligand_vocabulary_size'],
-                ],
+                'ligand_kernel_sizes', [
+                    [3, params['ligand_vocabulary_size']],
+                    [5, params['ligand_vocabulary_size']],
+                    [11, params['ligand_vocabulary_size']],
+                ]
             )
         else:
             self.ligand_kernel_sizes = params.get(
@@ -138,9 +137,9 @@ class BimodalMCA(nn.Module):
             self.receptor_kernel_sizes = params.get(
                 'receptor_kernel_sizes',
                 [
-                    [3, params['receptor_vocabulary_size'],
-                    [11, params['receptor_vocabulary_size'],
-                    [25, params['receptor_vocabulary_size'],
+                    [3, params['receptor_vocabulary_size']],
+                    [11, params['receptor_vocabulary_size']],
+                    [25, params['receptor_vocabulary_size']],
                 ],
             )
         else:
