@@ -1,4 +1,5 @@
 from collections import OrderedDict
+import pickle
 
 import pytoda
 import torch
@@ -37,12 +38,28 @@ class BimodalMCA(nn.Module):
             receptor_padding_length (int): dimension of tokens' embedding.
             receptor_vocabulary_size (int): size of the tokens vocabulary.
         Optional items in params:
-            activation_fn (string): Activation function used in all ayers for
+            activation_fn (str): Activation function used in all ayers for
                 specification in ACTIVATION_FN_FACTORY. Defaults to 'relu'.
             batch_norm (bool): Whether batch normalization is applied. Defaults
                 to True.
             dropout (float): Dropout probability in all except context
                 attention layer. Defaults to 0.5.
+            ligand_embedding (str): Way to numberically embed ligand sequence.
+                Options: 'predefined' (sequence is already embedded using
+                predefined token representations like BLOSUM matrix),
+                'one-hot', 'pretrained' (loads embedding from ligand_embedding
+                path) or 'learned (model learns an embedding from data).
+                Defaults to 'learned'.
+            ligand_embedding_path (str): Path where pretrained embedding
+                weights are stored. Needed if ligand_embedding is 'pretrained'.
+            receptor_embedding (str): Way to numberically embed receptor sequence.
+                Options: 'predefined' (sequence is already embedded using
+                predefined token representations like BLOSUM matrix),
+                'one-hot', 'pretrained' (loads embedding from receptor_embedding
+                path) or 'learned (model learns an embedding from data).
+                Defaults to 'learned'.
+            receptor_embedding_path (str): Path where pretrained embedding
+                weights are stored. Needed if receptor_embedding is 'pretrained'.
             ligand_embedding_size (int): Embedding dimensionality, default: 32
             receptor_embedding_size (int): Embedding dimensionality, default: 8
             ligand_filters (list[int]): Numbers of filters to learn per
@@ -99,22 +116,42 @@ class BimodalMCA(nn.Module):
         self.ligand_filters = params.get('ligand_filters', [32, 32, 32])
         self.receptor_filters = params.get('receptor_filters', [32, 32, 32])
 
-        self.ligand_kernel_sizes = params.get(
-            'ligand_kernel_sizes',
-            [
-                [3, self.ligand_embedding_size],
-                [5, self.ligand_embedding_size],
-                [11, self.ligand_embedding_size],
-            ],
-        )
-        self.receptor_kernel_sizes = params.get(
-            'receptor_kernel_sizes',
-            [
-                [3, self.receptor_embedding_size],
-                [11, self.receptor_embedding_size],
-                [25, self.receptor_embedding_size],
-            ],
-        )
+        if params.get('ligand_embedding', 'learned') == 'one_hot':
+            self.ligand_kernel_sizes = params.get(
+                'ligand_kernel_sizes',
+                [
+                    [3, params['ligand_vocabulary_size'],
+                    [5, params['ligand_vocabulary_size'],
+                    [11, params['ligand_vocabulary_size'],
+                ],
+            )
+        else:
+            self.ligand_kernel_sizes = params.get(
+                'ligand_kernel_sizes',
+                [
+                    [3, self.ligand_embedding_size],
+                    [5, self.ligand_embedding_size],
+                    [11, self.ligand_embedding_size],
+                ],
+            )
+        if params.get('receptor_embedding', 'learned') == 'one_hot':
+            self.receptor_kernel_sizes = params.get(
+                'receptor_kernel_sizes',
+                [
+                    [3, params['receptor_vocabulary_size'],
+                    [11, params['receptor_vocabulary_size'],
+                    [25, params['receptor_vocabulary_size'],
+                ],
+            )
+        else:
+            self.receptor_kernel_sizes = params.get(
+                'receptor_kernel_sizes',
+                [
+                    [3, self.receptor_embedding_size],
+                    [11, self.receptor_embedding_size],
+                    [25, self.receptor_embedding_size],
+                ],
+            )
 
         self.ligand_attention_size = params.get('ligand_attention_size', 16)
         self.receptor_attention_size = params.get(
@@ -151,16 +188,104 @@ class BimodalMCA(nn.Module):
             )
         """ Construct model  """
         # Embeddings
-        self.ligand_embedding = nn.Embedding(
-            self.params['ligand_vocabulary_size'],
-            self.ligand_embedding_size,
-            scale_grad_by_freq=params.get('embed_scale_grad', False),
-        )
-        self.receptor_embedding = nn.Embedding(
-            self.params['receptor_vocabulary_size'],
-            self.receptor_embedding_size,
-            scale_grad_by_freq=params.get('embed_scale_grad', False),
-        )
+        if params.get('ligand_embedding', 'learned') == 'pretrained':
+            # Load the pretrained embeddings
+            try:
+                with open(params['ligand_embedding_path'], 'rb') as f:
+                    embeddings = pickle.load(f)
+            except KeyError:
+                raise KeyError('Path for ligand embeddings missing in params.')
+
+            # Plug into layer
+            self.ligand_embedding = nn.Embedding(
+                embeddings.shape[0], embeddings.shape[1]
+            )
+            self.ligand_embedding.load_state_dict(
+                {'weight': torch.Tensor(embeddings)}
+            )
+            if params.get('fix_ligand_embeddings', True):
+                self.ligand_embedding.weight.requires_grad = False
+
+        elif params.get('ligand_embedding', 'learned') == 'one_hot':
+            self.ligand_embedding = nn.Embedding(
+                self.params['ligand_vocabulary_size'],
+                self.ligand_embedding_size,
+            )
+            # Plug in one hot-vectors and freeze weights
+            self.ligand_embedding.load_state_dict(
+                {
+                    'weight':
+                        torch.nn.functional.one_hot(
+                            torch.arange(
+                                self.params['ligand_vocabulary_size']
+                            )
+                        )
+                }
+            )
+            self.ligand_embedding.weight.requires_grad = False
+
+        elif params.get('ligand_embedding', 'learned') == 'learned':
+            self.ligand_embedding = nn.Embedding(
+                self.params['ligand_vocabulary_size'],
+                self.ligand_embedding_size,
+                scale_grad_by_freq=params.get('embed_scale_grad', False)
+            )
+        else:
+            raise ValueError(
+                'Choose either pretrained, one_hot, predefined or \
+                learned  as ligand_embedding. Defaults to learned'
+            )
+            #error message
+
+        if params.get('receptor_embedding', 'learned') == 'pretrained':
+            # Load the pretrained embeddings
+            try:
+                with open(params['receptor_embedding_path'], 'rb') as f:
+                    embeddings = pickle.load(f)
+            except KeyError:
+                raise KeyError(
+                    'Path for receptor embeddings missing in params.'
+                )
+
+            # Plug into layer
+            self.receptor_embedding = nn.Embedding(
+                embeddings.shape[0], embeddings.shape[1]
+            )
+            self.receptor_embedding.load_state_dict(
+                {'weight': torch.Tensor(embeddings)}
+            )
+            if params.get('fix_receptor_embeddings', True):
+                self.receptor_embedding.weight.requires_grad = False
+
+        elif params.get('receptor_embedding', 'learned') == 'one_hot':
+            self.receptor_embedding = nn.Embedding(
+                self.params['receptor_vocabulary_size'],
+                self.receptor_embedding_size,
+            )
+            # Plug in one hot-vectors and freeze weights
+            self.receptor_embedding.load_state_dict(
+                {
+                    'weight':
+                        torch.nn.functional.one_hot(
+                            torch.arange(
+                                self.params['receptor_vocabulary_size']
+                            )
+                        )
+                }
+            )
+            self.receptor_embedding.weight.requires_grad = False
+
+        elif params.get('receptor_embedding', 'learned') == 'learned':
+            self.receptor_embedding = nn.Embedding(
+                self.params['receptor_vocabulary_size'],
+                self.receptor_embedding_size,
+                scale_grad_by_freq=params.get('embed_scale_grad', False),
+            )
+        else:
+            raise ValueError(
+                'Choose either pretrained, one_hot, predefined or \
+                learned  as receptor_embedding. Defaults to learned'
+            )
 
         # Convolutions
         # TODO: Use nn.ModuleDict instead of the nn.Seq/OrderedDict
@@ -289,9 +414,12 @@ class BimodalMCA(nn.Module):
             predictions is IC50 drug sensitivity prediction of shape `[bs, 1]`.
             prediction_dict includes the prediction and attention weights.
         """
-
         # Embedding
+        if params.get('ligand_embedding', 'learned') == 'predefined':
+            embedded_ligand = ligand.to(torch.float)
         embedded_ligand = self.ligand_embedding(ligand.to(torch.int64))
+        if params.get('receptor_embedding', 'learned') == 'predefined':
+            embedded_receptor = receptor.to(torch.float)
         embedded_receptor = self.receptor_embedding(receptors.to(torch.int64))
 
         # Convolutions
