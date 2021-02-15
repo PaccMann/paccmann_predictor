@@ -35,12 +35,13 @@ parser.add_argument(
     help='Path to the drug affinity data.'
 )
 parser.add_argument(
-    'protein_filepath', type=str,
-    help='Path to the protein profile data.'
+    'receptor_filepath', type=str,
+    help='Path to the protein profile data. Receptors must be encoded as amino \
+    acids'
 )
 parser.add_argument(
-    'smi_filepath', type=str,
-    help='Path to the SMILES data.'
+    'ligand_filepath', type=str,
+    help='Path to the ligand data. Ligands must be encoded as SMILES'
 )
 parser.add_argument(
     'smiles_language_filepath', type=str,
@@ -68,8 +69,8 @@ parser.add_argument(
 def main(
     train_affinity_filepath,
     test_affinity_filepath,
-    protein_filepath,
-    smi_filepath,
+    receptor_filepath,
+    ligand_filepath,
     smiles_language_filepath,
     protein_language_filepath,
     model_path,
@@ -100,13 +101,13 @@ def main(
     # Assemble datasets
     train_dataset = DrugAffinityDataset(
         drug_affinity_filepath=train_affinity_filepath,
-        smi_filepath=smi_filepath,
-        protein_filepath=protein_filepath,
+        smi_filepath=ligand_filepath,
+        protein_filepath=receptor_filepath,
         protein_language=protein_language,
         smiles_vocab_file=smiles_language_filepath,
-        smiles_padding=params.get('smiles_padding', True),
-        smiles_padding_length=params.get('smiles_padding_length', None),
-        smiles_add_start_and_stop=params.get('smiles_add_start_stop', True),
+        smiles_padding=params.get('ligand_padding', True),
+        smiles_padding_length=params.get('ligand_padding_length', None),
+        smiles_add_start_and_stop=params.get('ligand_add_start_stop', True),
         smiles_augment=params.get('augment_smiles', False),
         smiles_canonical=params.get('smiles_canonical', False),
         smiles_kekulize=params.get('smiles_kekulize', False),
@@ -116,9 +117,9 @@ def main(
         smiles_remove_chirality=params.get('smiles_remove_chirality', False),
         smiles_selfies=params.get('selfies', False),
         protein_amino_acid_dict=params.get('protein_amino_acid_dict', 'iupac'),
-        protein_padding=params.get('protein_padding', True),
-        protein_padding_length=params.get('protein_padding_length', None),
-        protein_add_start_and_stop=params.get('protein_add_start_stop', True),
+        protein_padding=params.get('receptor_padding', True),
+        protein_padding_length=params.get('receptor_padding_length', None),
+        protein_add_start_and_stop=params.get('receptor_add_start_stop', True),
         protein_augment_by_revert=params.get('protein_augment', False),
         device=device,
         drug_affinity_dtype=torch.float,
@@ -135,13 +136,13 @@ def main(
 
     test_dataset = DrugAffinityDataset(
         drug_affinity_filepath=test_affinity_filepath,
-        smi_filepath=smi_filepath,
-        protein_filepath=protein_filepath,
+        smi_filepath=ligand_filepath,
+        protein_filepath=receptor_filepath,
         protein_language=protein_language,
         smiles_vocab_file=smiles_language_filepath,
-        smiles_padding=params.get('smiles_padding', True),
-        smiles_padding_length=params.get('smiles_padding_length', None),
-        smiles_add_start_and_stop=params.get('smiles_add_start_stop', True),
+        smiles_padding=params.get('ligand_padding', True),
+        smiles_padding_length=params.get('ligand_padding_length', None),
+        smiles_add_start_and_stop=params.get('ligand_add_start_stop', True),
         smiles_augment=False,
         smiles_canonical=params.get('smiles_test_canonical', False),
         smiles_kekulize=params.get('smiles_kekulize', False),
@@ -151,9 +152,9 @@ def main(
         smiles_remove_chirality=params.get('smiles_remove_chirality', False),
         smiles_selfies=params.get('selfies', False),
         protein_amino_acid_dict=params.get('protein_amino_acid_dict', 'iupac'),
-        protein_padding=params.get('protein_padding', True),
-        protein_padding_length=params.get('protein_padding_length', None),
-        protein_add_start_and_stop=params.get('protein_add_start_stop', True),
+        protein_padding=params.get('receptor_padding', True),
+        protein_padding_length=params.get('receptor_padding_length', None),
+        protein_add_start_and_stop=params.get('receptor_add_start_stop', True),
         protein_augment_by_revert=False,
         device=device,
         drug_affinity_dtype=torch.float,
@@ -179,10 +180,12 @@ def main(
     save_top_model = os.path.join(model_dir, 'weights/{}_{}_{}.pt')
     params.update(
         {
-            'smiles_vocabulary_size': (
-                train_dataset.smiles_dataset.smiles_language.number_of_tokens
-            ),
-            'protein_vocabulary_size': protein_language.number_of_tokens,
+            'ligand_vocabulary_size':
+                (
+                    train_dataset.smiles_dataset.smiles_language.
+                    number_of_tokens
+                ),
+            'receptor_vocabulary_size': protein_language.number_of_tokens,
         }
     )
 
@@ -194,7 +197,9 @@ def main(
         try:
             model.load(os.path.join(model_dir, 'weights', 'best_mca.pt'))
 
-            with open(os.path.join(model_dir, 'results', 'mse.json'), 'r') as f:
+            with open(
+                os.path.join(model_dir, 'results', 'mse.json'), 'r'
+            ) as f:
                 info = json.load(f)
 
                 max_roc_auc = info['best_roc_auc']
@@ -206,9 +211,9 @@ def main(
         min_loss, max_roc_auc = 100, 0
 
     # Define optimizer
-    optimizer = OPTIMIZER_FACTORY[params.get('optimizer', 'adam')](
-        model.parameters(), lr=params.get('lr', 0.001)
-    )
+    optimizer = OPTIMIZER_FACTORY[
+        params.get('optimizer',
+                   'adam')](model.parameters(), lr=params.get('lr', 0.001))
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     params.update({'number_of_parameters': num_params})
     logger.info(f'Number of parameters: {num_params}')
@@ -230,10 +235,10 @@ def main(
         logger.info(f"== Epoch [{epoch}/{params['epochs']}] ==")
         train_loss = 0
 
-        for ind, (smiles, proteins, y) in enumerate(train_loader):
+        for ind, (ligands, receptors, y) in enumerate(train_loader):
             if ind % 100 == 0:
                 logger.info(f'Batch {ind}/{len(train_loader)}')
-            y_hat, pred_dict = model(smiles, proteins)
+            y_hat, pred_dict = model(ligands, receptors)
             loss = model.loss(y_hat, y.to(device))
             optimizer.zero_grad()
             loss.backward()
@@ -256,8 +261,10 @@ def main(
             test_loss = 0
             predictions = []
             labels = []
-            for ind, (smiles, proteins, y) in enumerate(test_loader):
-                y_hat, pred_dict = model(smiles.to(device), proteins.to(device))
+            for ind, (ligands, receptors, y) in enumerate(test_loader):
+                y_hat, pred_dict = model(
+                    ligands.to(device), receptors.to(device)
+                )
                 predictions.append(y_hat)
                 labels.append(y.clone())
                 loss = model.loss(y_hat, y.to(device))
@@ -287,7 +294,9 @@ def main(
                 'best_roc_auc': str(max_roc_auc),
                 'test_loss': str(min_loss),
             }
-            with open(os.path.join(model_dir, 'results', metric + '.json'), 'w') as f:
+            with open(
+                os.path.join(model_dir, 'results', metric + '.json'), 'w'
+            ) as f:
                 json.dump(info, f)
             np.save(
                 os.path.join(model_dir, 'results', metric + '_preds.npy'),
@@ -330,8 +339,8 @@ if __name__ == '__main__':
     main(
         args.train_affinity_filepath,
         args.test_affinity_filepath,
-        args.protein_filepath,
-        args.smi_filepath,
+        args.receptor_filepath,
+        args.ligand_filepath,
         args.smiles_language_filepath,
         args.protein_language_filepath,
         args.model_path,

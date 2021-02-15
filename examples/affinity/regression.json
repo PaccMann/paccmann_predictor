@@ -1,9 +1,10 @@
 {
     "augment_smiles": false,
     "smiles_canonical": false,
-    "smiles_start_stop_token": true,
-    "smiles_padding_length": 512,
-    "protein_padding_length": 2048,
+    "ligand_start_stop_token": true,
+    "receptor_start_stop_token": true,
+    "ligand_padding_length": 512,
+    "receptor_padding_length": 2048,
     "loss_fn": "mse",
     "dense_hidden_sizes": [
         512
