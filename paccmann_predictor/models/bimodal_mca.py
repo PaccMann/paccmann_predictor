@@ -115,10 +115,26 @@ class BimodalMCA(nn.Module):
         self.dropout = params.get('dropout', 0.5)
         self.use_batch_norm = params.get('batch_norm', True)
         self.temperature = params.get('temperature', 1.0)
-        self.ligand_embedding_size = params.get('ligand_embedding_size', 32)
-        self.receptor_embedding_size = params.get('receptor_embedding_size', 8)
         self.ligand_filters = params.get('ligand_filters', [32, 32, 32])
         self.receptor_filters = params.get('receptor_filters', [32, 32, 32])
+
+        # set embedding_size to vocabulary_size if one_hot encoding is chosen
+        if params.get('ligand_embedding', 'learned') == 'one_hot':
+            self.ligand_embedding_size = params.get(
+                'ligand_vocabulary_size', 32
+            )
+        else:
+            self.ligand_embedding_size = params.get(
+                'ligand_embedding_size', 32
+            )
+        if params.get('receptor_embedding', 'learned') == 'one_hot':
+            self.receptor_embedding_size = params.get(
+                'receptor_vocabulary_size', 35
+            )
+        else:
+            self.receptor_embedding_size = params.get(
+                'receptor_embedding_size', 35
+            )
 
         if params.get('ligand_embedding', 'learned') == 'one_hot':
             self.ligand_kernel_sizes = params.get(
@@ -212,7 +228,7 @@ class BimodalMCA(nn.Module):
         elif params.get('ligand_embedding', 'learned') == 'one_hot':
             self.ligand_embedding = nn.Embedding(
                 self.params['ligand_vocabulary_size'],
-                self.ligand_embedding_size,
+                self.params['ligand_vocabulary_size'],
             )
             # Plug in one hot-vectors and freeze weights
             self.ligand_embedding.load_state_dict(
@@ -263,7 +279,7 @@ class BimodalMCA(nn.Module):
         elif params.get('receptor_embedding', 'learned') == 'one_hot':
             self.receptor_embedding = nn.Embedding(
                 self.params['receptor_vocabulary_size'],
-                self.receptor_embedding_size,
+                self.params['receptor_vocabulary_size'],
             )
             # Plug in one hot-vectors and freeze weights
             self.receptor_embedding.load_state_dict(
@@ -420,10 +436,14 @@ class BimodalMCA(nn.Module):
         # Embedding
         if self.ligand_embedding_type == 'predefined':
             embedded_ligand = ligand.to(torch.float)
-        embedded_ligand = self.ligand_embedding(ligand.to(torch.int64))
+        else:
+            embedded_ligand = self.ligand_embedding(ligand.to(torch.int64))
         if self.receptor_embedding_type == 'predefined':
             embedded_receptor = receptors.to(torch.float)
-        embedded_receptor = self.receptor_embedding(receptors.to(torch.int64))
+        else:
+            embedded_receptor = self.receptor_embedding(
+                receptors.to(torch.int64)
+            )
 
         # Convolutions
         encoded_ligand = [embedded_ligand] + [

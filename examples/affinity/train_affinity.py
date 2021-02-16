@@ -118,7 +118,17 @@ def main(
         )
     else:
         protein_language = ProteinLanguage()
-    #protein_language = ProteinLanguage.load(protein_language_filepath)
+
+    if params.get('ligand_embedding', 'learned') == 'one_hot':
+        logger.info(
+            'ligand_embedding_size parameter in param file is ignored in '
+            'one_hot embedding setting, ligand_vocabulary_size used instead.'
+        )
+    if params.get('receptor_embedding', 'learned') == 'one_hot':
+        logger.info(
+            'receptor_embedding_size parameter in param file is ignored in '
+            'one_hot embedding setting, receptor_vocabulary_size used instead.'
+        )
 
     # Assemble datasets
     train_dataset = DrugAffinityDataset(
@@ -210,7 +220,10 @@ def main(
             'receptor_vocabulary_size': protein_language.number_of_tokens,
         }
     )
-
+    logger.info(
+        f'Receptor vocabulary size is {protein_language.number_of_tokens} and '
+        f'ligand vocabulary size is {train_dataset.smiles_dataset.smiles_language.number_of_tokens}'
+    )
     model_fn = params.get('model_fn', 'bimodal_mca')
     model = BimodalMCA(params)  # MODEL_FACTORY[model_fn](params).to(device)
 
