@@ -136,41 +136,22 @@ class BimodalMCA(nn.Module):
                 'receptor_embedding_size', 35
             )
 
-        if params.get('ligand_embedding', 'learned') == 'one_hot':
-            self.ligand_kernel_sizes = params.get(
-                'ligand_kernel_sizes', [
-                    [3, params['ligand_vocabulary_size']],
-                    [5, params['ligand_vocabulary_size']],
-                    [11, params['ligand_vocabulary_size']],
-                ]
-            )
-        else:
-            self.ligand_kernel_sizes = params.get(
-                'ligand_kernel_sizes',
-                [
-                    [3, self.ligand_embedding_size],
-                    [5, self.ligand_embedding_size],
-                    [11, self.ligand_embedding_size],
-                ],
-            )
-        if params.get('receptor_embedding', 'learned') == 'one_hot':
-            self.receptor_kernel_sizes = params.get(
-                'receptor_kernel_sizes',
-                [
-                    [3, params['receptor_vocabulary_size']],
-                    [11, params['receptor_vocabulary_size']],
-                    [25, params['receptor_vocabulary_size']],
-                ],
-            )
-        else:
-            self.receptor_kernel_sizes = params.get(
-                'receptor_kernel_sizes',
-                [
-                    [3, self.receptor_embedding_size],
-                    [11, self.receptor_embedding_size],
-                    [25, self.receptor_embedding_size],
-                ],
-            )
+        self.ligand_kernel_sizes = params.get(
+            'ligand_kernel_sizes',
+            [
+                [3, self.ligand_embedding_size],
+                [5, self.ligand_embedding_size],
+                [11, self.ligand_embedding_size],
+            ],
+        )
+        self.receptor_kernel_sizes = params.get(
+            'receptor_kernel_sizes',
+            [
+                [3, self.receptor_embedding_size],
+                [11, self.receptor_embedding_size],
+                [25, self.receptor_embedding_size],
+            ],
+        )
 
         self.ligand_attention_size = params.get('ligand_attention_size', 16)
         self.receptor_attention_size = params.get(
