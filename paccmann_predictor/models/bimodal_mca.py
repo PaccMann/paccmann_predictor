@@ -231,11 +231,10 @@ class BimodalMCA(nn.Module):
                 scale_grad_by_freq=params.get('embed_scale_grad', False)
             )
         else:
-            raise ValueError(
-                'Choose either pretrained, one_hot, predefined or \
-                learned  as ligand_embedding. Defaults to learned'
-            )
-            #error message
+            assert params.get(
+                'ligand_embedding', 'learned'
+            ) == 'predefined', 'Choose either pretrained, one_hot, predefined \
+             or learned as ligand_embedding. Defaults to learned'
 
         if params.get('receptor_embedding', 'learned') == 'pretrained':
             # Load the pretrained embeddings
@@ -282,10 +281,10 @@ class BimodalMCA(nn.Module):
                 scale_grad_by_freq=params.get('embed_scale_grad', False),
             )
         else:
-            raise ValueError(
-                'Choose either pretrained, one_hot, predefined or \
-                learned  as receptor_embedding. Defaults to learned'
-            )
+            assert params.get(
+                'receptor_embedding', 'learned'
+            ) == 'predefined', 'Choose either pretrained, one_hot, predefined \
+             or learned as ligand_embedding. Defaults to learned'
 
         # Convolutions
         # TODO: Use nn.ModuleDict instead of the nn.Seq/OrderedDict
