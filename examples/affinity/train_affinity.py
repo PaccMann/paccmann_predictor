@@ -120,12 +120,12 @@ def main(
         protein_language = ProteinLanguage()
 
     if params.get('ligand_embedding', 'learned') == 'one_hot':
-        logger.info(
+        logger.warning(
             'ligand_embedding_size parameter in param file is ignored in '
             'one_hot embedding setting, ligand_vocabulary_size used instead.'
         )
     if params.get('receptor_embedding', 'learned') == 'one_hot':
-        logger.info(
+        logger.warning(
             'receptor_embedding_size parameter in param file is ignored in '
             'one_hot embedding setting, receptor_vocabulary_size used instead.'
         )
