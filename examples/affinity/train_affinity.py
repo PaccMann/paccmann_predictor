@@ -15,7 +15,7 @@ from sklearn.metrics import (
     precision_recall_curve,
     roc_curve,
 )
-from bimodal_mca import BimodalMCA
+from paccmann_predictor.models import MODEL_FACTORY
 from paccmann_predictor.utils.hyperparams import OPTIMIZER_FACTORY
 from paccmann_predictor.utils.utils import get_device
 from pytoda.datasets import DrugAffinityDataset
@@ -225,7 +225,9 @@ def main(
         f'ligand vocabulary size is {train_dataset.smiles_dataset.smiles_language.number_of_tokens}'
     )
     model_fn = params.get('model_fn', 'bimodal_mca')
-    model = BimodalMCA(params)  # MODEL_FACTORY[model_fn](params).to(device)
+    model = MODEL_FACTORY[model_fn](params).to(device)
+    model._associate_language(smiles_language)
+    model._associate_language(protein_language)
 
     if os.path.isfile(os.path.join(model_dir, 'weights', 'best_mca.pt')):
         logger.info('Found existing model, restoring now...')
