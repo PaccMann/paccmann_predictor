@@ -15,11 +15,13 @@ from sklearn.metrics import (
     precision_recall_curve,
     roc_curve,
 )
-from paccmann_predictor.models import MODEL_FACTORY
+from bimodal_mca import BimodalMCA
 from paccmann_predictor.utils.hyperparams import OPTIMIZER_FACTORY
 from paccmann_predictor.utils.utils import get_device
 from pytoda.datasets import DrugAffinityDataset
-from pytoda.proteins.protein_language import ProteinLanguage
+from pytoda.proteins import ProteinLanguage, ProteinFeatureLanguage
+from pytoda.smiles import metadata
+from pytoda.smiles.smiles_language import SMILESLanguage, SMILESTokenizer
 
 # setup logging
 logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
@@ -44,14 +46,6 @@ parser.add_argument(
     help='Path to the ligand data. Ligands must be encoded as SMILES'
 )
 parser.add_argument(
-    'smiles_language_filepath', type=str,
-    help='Path to a pickle of a SMILES language object.'
-)
-parser.add_argument(
-    'protein_language_filepath', type=str,
-    help='Path to a pickle of a Protein language object.'
-)
-parser.add_argument(
     'model_path', type=str,
     help='Directory where the model will be stored.'
 )
@@ -71,8 +65,6 @@ def main(
     test_affinity_filepath,
     receptor_filepath,
     ligand_filepath,
-    smiles_language_filepath,
-    protein_language_filepath,
     model_path,
     params_filepath,
     training_name,
@@ -96,7 +88,37 @@ def main(
     device = get_device()
 
     # Load languages
-    protein_language = ProteinLanguage.load(protein_language_filepath)
+    smiles_language_filepath = os.path.join(
+        '/',
+        *metadata.__file__.split('/')[:-1], 'smiles_language'
+    )
+    smiles_language = SMILESTokenizer.from_pretrained(smiles_language_filepath)
+    smiles_language.set_encoding_transforms(
+        randomize=None,
+        add_start_and_stop=params.get('ligand_start_stop_token', True),
+        padding=params.get('ligand_padding', True),
+        padding_length=params.get('ligand_padding_length', True),
+        device=device,
+    )
+    smiles_language.set_smiles_transforms(
+        augment=params.get('augment_smiles', False),
+        canonical=params.get('smiles_canonical', False),
+        kekulize=params.get('smiles_kekulize', False),
+        all_bonds_explicit=params.get('smiles_bonds_explicit', False),
+        all_hs_explicit=params.get('smiles_all_hs_explicit', False),
+        remove_bonddir=params.get('smiles_remove_bonddir', False),
+        remove_chirality=params.get('smiles_remove_chirality', False),
+        selfies=params.get('selfies', False),
+        sanitize=params.get('sanitize', False)
+    )
+
+    if params.get('receptor_embedding', 'learned') == 'predefined':
+        protein_language = ProteinFeatureLanguage(
+            features=params.get('predefined_embedding', 'blosum')
+        )
+    else:
+        protein_language = ProteinLanguage()
+    #protein_language = ProteinLanguage.load(protein_language_filepath)
 
     # Assemble datasets
     train_dataset = DrugAffinityDataset(
@@ -104,7 +126,7 @@ def main(
         smi_filepath=ligand_filepath,
         protein_filepath=receptor_filepath,
         protein_language=protein_language,
-        smiles_vocab_file=smiles_language_filepath,
+        smiles_language=smiles_language,
         smiles_padding=params.get('ligand_padding', True),
         smiles_padding_length=params.get('ligand_padding_length', None),
         smiles_add_start_and_stop=params.get('ligand_add_start_stop', True),
@@ -139,7 +161,7 @@ def main(
         smi_filepath=ligand_filepath,
         protein_filepath=receptor_filepath,
         protein_language=protein_language,
-        smiles_vocab_file=smiles_language_filepath,
+        smiles_language=smiles_language,
         smiles_padding=params.get('ligand_padding', True),
         smiles_padding_length=params.get('ligand_padding_length', None),
         smiles_add_start_and_stop=params.get('ligand_add_start_stop', True),
@@ -190,7 +212,7 @@ def main(
     )
 
     model_fn = params.get('model_fn', 'bimodal_mca')
-    model = MODEL_FACTORY[model_fn](params).to(device)
+    model = BimodalMCA(params)  # MODEL_FACTORY[model_fn](params).to(device)
 
     if os.path.isfile(os.path.join(model_dir, 'weights', 'best_mca.pt')):
         logger.info('Found existing model, restoring now...')
@@ -341,8 +363,6 @@ if __name__ == '__main__':
         args.test_affinity_filepath,
         args.receptor_filepath,
         args.ligand_filepath,
-        args.smiles_language_filepath,
-        args.protein_language_filepath,
         args.model_path,
         args.params_filepath,
         args.training_name,

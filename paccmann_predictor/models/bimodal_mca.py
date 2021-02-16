@@ -103,6 +103,10 @@ class BimodalMCA(nn.Module):
         self.loss_fn = LOSS_FN_FACTORY[
             params.get('loss_fn', 'binary_cross_entropy')
         ]  # yapf: disable
+        self.ligand_embedding_type = params.get('ligand_embedding', 'learned')
+        self.receptor_embedding_type = params.get(
+            'receptor_embedding', 'learned'
+        )
 
         # Hyperparameter
         self.act_fn = ACTIVATION_FN_FACTORY[
@@ -414,11 +418,11 @@ class BimodalMCA(nn.Module):
             prediction_dict includes the prediction and attention weights.
         """
         # Embedding
-        if params.get('ligand_embedding', 'learned') == 'predefined':
+        if self.ligand_embedding_type == 'predefined':
             embedded_ligand = ligand.to(torch.float)
         embedded_ligand = self.ligand_embedding(ligand.to(torch.int64))
-        if params.get('receptor_embedding', 'learned') == 'predefined':
-            embedded_receptor = receptor.to(torch.float)
+        if self.receptor_embedding_type == 'predefined':
+            embedded_receptor = receptors.to(torch.float)
         embedded_receptor = self.receptor_embedding(receptors.to(torch.int64))
 
         # Convolutions
