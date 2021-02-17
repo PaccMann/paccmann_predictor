@@ -57,17 +57,19 @@ parser.add_argument(
     'training_name', type=str,
     help='Name for the training.'
 )
+parser.add_argument(
+    '-smiles_language_filepath', type=str, default='', required=False,
+    help='Path to smiles language (contains token_count.json, vocab.json and \
+        tokenizer_config.json files). If not specified, language from pytoda \
+            metadata is loaded.'
+)
 # yapf: enable
 
 
 def main(
-    train_affinity_filepath,
-    test_affinity_filepath,
-    receptor_filepath,
-    ligand_filepath,
-    model_path,
-    params_filepath,
-    training_name,
+    train_affinity_filepath, test_affinity_filepath, receptor_filepath,
+    ligand_filepath, model_path, params_filepath, training_name,
+    smiles_language_filepath
 ):
 
     logger = logging.getLogger(f'{training_name}')
@@ -88,10 +90,11 @@ def main(
     device = get_device()
 
     # Load languages
-    smiles_language_filepath = os.path.join(
-        os.sep,
-        *metadata.__file__.split(os.sep)[:-1], 'smiles_language'
-    )
+    if smiles_language_filepath == '':
+        smiles_language_filepath = os.path.join(
+            os.sep,
+            *metadata.__file__.split(os.sep)[:-1], 'smiles_language'
+        )
     smiles_language = SMILESTokenizer.from_pretrained(smiles_language_filepath)
     smiles_language.set_encoding_transforms(
         randomize=None,
@@ -374,11 +377,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     # run the training
     main(
-        args.train_affinity_filepath,
-        args.test_affinity_filepath,
-        args.receptor_filepath,
-        args.ligand_filepath,
-        args.model_path,
-        args.params_filepath,
-        args.training_name,
+        args.train_affinity_filepath, args.test_affinity_filepath,
+        args.receptor_filepath, args.ligand_filepath, args.model_path,
+        args.params_filepath, args.training_name, args.smiles_language_filepath
     )
