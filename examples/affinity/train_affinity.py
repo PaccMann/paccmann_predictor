@@ -90,7 +90,7 @@ def main(
     # Load languages
     smiles_language_filepath = os.path.join(
         os.sep,
-        *metadata.__file__.split('/')[:-1], 'smiles_language'
+        *metadata.__file__.split(os.sep)[:-1], 'smiles_language'
     )
     smiles_language = SMILESTokenizer.from_pretrained(smiles_language_filepath)
     smiles_language.set_encoding_transforms(
