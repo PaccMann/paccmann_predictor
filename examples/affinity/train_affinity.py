@@ -10,14 +10,18 @@ from time import time
 import numpy as np
 import torch
 from sklearn.metrics import (
-    auc, average_precision_score, precision_recall_curve, roc_curve
+    auc,
+    average_precision_score,
+    precision_recall_curve,
+    roc_curve,
 )
 from paccmann_predictor.models import MODEL_FACTORY
 from paccmann_predictor.utils.hyperparams import OPTIMIZER_FACTORY
 from paccmann_predictor.utils.utils import get_device
 from pytoda.datasets import DrugAffinityDataset
-from pytoda.proteins.protein_language import ProteinLanguage
-from pytoda.smiles.smiles_language import SMILESLanguage
+from pytoda.proteins import ProteinLanguage, ProteinFeatureLanguage
+from pytoda.smiles import metadata
+from pytoda.smiles.smiles_language import SMILESLanguage, SMILESTokenizer
 
 # setup logging
 logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
@@ -33,20 +37,13 @@ parser.add_argument(
     help='Path to the drug affinity data.'
 )
 parser.add_argument(
-    'protein_filepath', type=str,
-    help='Path to the protein profile data.'
+    'receptor_filepath', type=str,
+    help='Path to the protein profile data. Receptors must be encoded as amino \
+    acids'
 )
 parser.add_argument(
-    'smi_filepath', type=str,
-    help='Path to the SMILES data.'
-)
-parser.add_argument(
-    'smiles_language_filepath', type=str,
-    help='Path to a pickle of a SMILES language object.'
-)
-parser.add_argument(
-    'protein_language_filepath', type=str,
-    help='Path to a pickle of a Protein language object.'
+    'ligand_filepath', type=str,
+    help='Path to the ligand data. Ligands must be encoded as SMILES'
 )
 parser.add_argument(
     'model_path', type=str,
@@ -60,14 +57,19 @@ parser.add_argument(
     'training_name', type=str,
     help='Name for the training.'
 )
-
+parser.add_argument(
+    '-smiles_language_filepath', type=str, default='', required=False,
+    help='Path to smiles language (contains token_count.json, vocab.json and \
+        tokenizer_config.json files). If not specified, language from pytoda \
+            metadata is loaded.'
+)
 # yapf: enable
 
 
 def main(
-    train_affinity_filepath, test_affinity_filepath, protein_filepath,
-    smi_filepath, smiles_language_filepath, protein_language_filepath,
-    model_path, params_filepath, training_name
+    train_affinity_filepath, test_affinity_filepath, receptor_filepath,
+    ligand_filepath, model_path, params_filepath, training_name,
+    smiles_language_filepath
 ):
 
     logger = logging.getLogger(f'{training_name}')
@@ -88,19 +90,59 @@ def main(
     device = get_device()
 
     # Load languages
-    smiles_language = SMILESLanguage.load(smiles_language_filepath)
-    protein_language = ProteinLanguage.load(protein_language_filepath)
+    if smiles_language_filepath == '':
+        smiles_language_filepath = os.path.join(
+            os.sep,
+            *metadata.__file__.split(os.sep)[:-1], 'smiles_language'
+        )
+    smiles_language = SMILESTokenizer.from_pretrained(smiles_language_filepath)
+    smiles_language.set_encoding_transforms(
+        randomize=None,
+        add_start_and_stop=params.get('ligand_start_stop_token', True),
+        padding=params.get('ligand_padding', True),
+        padding_length=params.get('ligand_padding_length', True),
+        device=device,
+    )
+    smiles_language.set_smiles_transforms(
+        augment=params.get('augment_smiles', False),
+        canonical=params.get('smiles_canonical', False),
+        kekulize=params.get('smiles_kekulize', False),
+        all_bonds_explicit=params.get('smiles_bonds_explicit', False),
+        all_hs_explicit=params.get('smiles_all_hs_explicit', False),
+        remove_bonddir=params.get('smiles_remove_bonddir', False),
+        remove_chirality=params.get('smiles_remove_chirality', False),
+        selfies=params.get('selfies', False),
+        sanitize=params.get('sanitize', False)
+    )
+
+    if params.get('receptor_embedding', 'learned') == 'predefined':
+        protein_language = ProteinFeatureLanguage(
+            features=params.get('predefined_embedding', 'blosum')
+        )
+    else:
+        protein_language = ProteinLanguage()
+
+    if params.get('ligand_embedding', 'learned') == 'one_hot':
+        logger.warning(
+            'ligand_embedding_size parameter in param file is ignored in '
+            'one_hot embedding setting, ligand_vocabulary_size used instead.'
+        )
+    if params.get('receptor_embedding', 'learned') == 'one_hot':
+        logger.warning(
+            'receptor_embedding_size parameter in param file is ignored in '
+            'one_hot embedding setting, receptor_vocabulary_size used instead.'
+        )
 
     # Assemble datasets
     train_dataset = DrugAffinityDataset(
         drug_affinity_filepath=train_affinity_filepath,
-        smi_filepath=smi_filepath,
-        protein_filepath=protein_filepath,
-        smiles_language=smiles_language,
+        smi_filepath=ligand_filepath,
+        protein_filepath=receptor_filepath,
         protein_language=protein_language,
-        smiles_padding=params.get('smiles_padding', True),
-        smiles_padding_length=params.get('smiles_padding_length', None),
-        smiles_add_start_and_stop=params.get('smiles_add_start_stop', True),
+        smiles_language=smiles_language,
+        smiles_padding=params.get('ligand_padding', True),
+        smiles_padding_length=params.get('ligand_padding_length', None),
+        smiles_add_start_and_stop=params.get('ligand_add_start_stop', True),
         smiles_augment=params.get('augment_smiles', False),
         smiles_canonical=params.get('smiles_canonical', False),
         smiles_kekulize=params.get('smiles_kekulize', False),
@@ -110,33 +152,34 @@ def main(
         smiles_remove_chirality=params.get('smiles_remove_chirality', False),
         smiles_selfies=params.get('selfies', False),
         protein_amino_acid_dict=params.get('protein_amino_acid_dict', 'iupac'),
-        protein_padding=params.get('protein_padding', True),
-        protein_padding_length=params.get('protein_padding_length', None),
-        protein_add_start_and_stop=params.get('protein_add_start_stop', True),
+        protein_padding=params.get('receptor_padding', True),
+        protein_padding_length=params.get('receptor_padding_length', None),
+        protein_add_start_and_stop=params.get('receptor_add_start_stop', True),
         protein_augment_by_revert=params.get('protein_augment', False),
         device=device,
         drug_affinity_dtype=torch.float,
-        backend='eager'
+        backend='eager',
+        iterate_dataset=params.get('iterate_dataset', False),
     )
     train_loader = torch.utils.data.DataLoader(
         dataset=train_dataset,
         batch_size=params['batch_size'],
         shuffle=True,
         drop_last=True,
-        num_workers=params.get('num_workers', 0)
+        num_workers=params.get('num_workers', 0),
     )
 
     test_dataset = DrugAffinityDataset(
         drug_affinity_filepath=test_affinity_filepath,
-        smi_filepath=smi_filepath,
-        protein_filepath=protein_filepath,
-        smiles_language=smiles_language,
+        smi_filepath=ligand_filepath,
+        protein_filepath=receptor_filepath,
         protein_language=protein_language,
-        smiles_padding=params.get('smiles_padding', True),
-        smiles_padding_length=params.get('smiles_padding_length', None),
-        smiles_add_start_and_stop=params.get('smiles_add_start_stop', True),
+        smiles_language=smiles_language,
+        smiles_padding=params.get('ligand_padding', True),
+        smiles_padding_length=params.get('ligand_padding_length', None),
+        smiles_add_start_and_stop=params.get('ligand_add_start_stop', True),
         smiles_augment=False,
-        smiles_canonical=params.get('smiles_canonical', False),
+        smiles_canonical=params.get('smiles_test_canonical', False),
         smiles_kekulize=params.get('smiles_kekulize', False),
         smiles_all_bonds_explicit=params.get('smiles_bonds_explicit', False),
         smiles_all_hs_explicit=params.get('smiles_all_hs_explicit', False),
@@ -144,20 +187,21 @@ def main(
         smiles_remove_chirality=params.get('smiles_remove_chirality', False),
         smiles_selfies=params.get('selfies', False),
         protein_amino_acid_dict=params.get('protein_amino_acid_dict', 'iupac'),
-        protein_padding=params.get('protein_padding', True),
-        protein_padding_length=params.get('protein_padding_length', None),
-        protein_add_start_and_stop=params.get('protein_add_start_stop', True),
+        protein_padding=params.get('receptor_padding', True),
+        protein_padding_length=params.get('receptor_padding_length', None),
+        protein_add_start_and_stop=params.get('receptor_add_start_stop', True),
         protein_augment_by_revert=False,
         device=device,
         drug_affinity_dtype=torch.float,
-        backend='eager'
+        backend='eager',
+        iterate_dataset=params.get('iterate_dataset', False),
     )
     test_loader = torch.utils.data.DataLoader(
         dataset=test_dataset,
         batch_size=params['batch_size'],
         shuffle=True,
         drop_last=True,
-        num_workers=params.get('num_workers', 0)
+        num_workers=params.get('num_workers', 0),
     )
     logger.info(
         f'Training dataset has {len(train_dataset)} samples, test set has '
@@ -169,11 +213,20 @@ def main(
         f'model is {device}'
     )
     save_top_model = os.path.join(model_dir, 'weights/{}_{}_{}.pt')
-    params.update({
-        'smiles_vocabulary_size': smiles_language.number_of_tokens,
-        'protein_vocabulary_size': protein_language.number_of_tokens
-    })  # yapf: disable
-
+    params.update(
+        {
+            'ligand_vocabulary_size':
+                (
+                    train_dataset.smiles_dataset.smiles_language.
+                    number_of_tokens
+                ),
+            'receptor_vocabulary_size': protein_language.number_of_tokens,
+        }
+    )
+    logger.info(
+        f'Receptor vocabulary size is {protein_language.number_of_tokens} and '
+        f'ligand vocabulary size is {train_dataset.smiles_dataset.smiles_language.number_of_tokens}'
+    )
     model_fn = params.get('model_fn', 'bimodal_mca')
     model = MODEL_FACTORY[model_fn](params).to(device)
     model._associate_language(smiles_language)
@@ -198,10 +251,9 @@ def main(
         min_loss, max_roc_auc = 100, 0
 
     # Define optimizer
-    optimizer = (
-        OPTIMIZER_FACTORY[params.get('optimizer', 'adam')]
-        (model.parameters(), lr=params.get('lr', 0.001))
-    )
+    optimizer = OPTIMIZER_FACTORY[
+        params.get('optimizer',
+                   'adam')](model.parameters(), lr=params.get('lr', 0.001))
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     params.update({'number_of_parameters': num_params})
     logger.info(f'Number of parameters: {num_params}')
@@ -223,10 +275,10 @@ def main(
         logger.info(f"== Epoch [{epoch}/{params['epochs']}] ==")
         train_loss = 0
 
-        for ind, (smiles, proteins, y) in enumerate(train_loader):
+        for ind, (ligands, receptors, y) in enumerate(train_loader):
             if ind % 100 == 0:
                 logger.info(f'Batch {ind}/{len(train_loader)}')
-            y_hat, pred_dict = model(smiles, proteins)
+            y_hat, pred_dict = model(ligands, receptors)
             loss = model.loss(y_hat, y.to(device))
             optimizer.zero_grad()
             loss.backward()
@@ -249,9 +301,9 @@ def main(
             test_loss = 0
             predictions = []
             labels = []
-            for ind, (smiles, proteins, y) in enumerate(test_loader):
+            for ind, (ligands, receptors, y) in enumerate(test_loader):
                 y_hat, pred_dict = model(
-                    smiles.to(device), proteins.to(device)
+                    ligands.to(device), receptors.to(device)
                 )
                 predictions.append(y_hat)
                 labels.append(y.clone())
@@ -280,7 +332,7 @@ def main(
             model.save(path.format(typ, metric, model_fn))
             info = {
                 'best_roc_auc': str(max_roc_auc),
-                'test_loss': str(min_loss)
+                'test_loss': str(min_loss),
             }
             with open(
                 os.path.join(model_dir, 'results', metric + '.json'), 'w'
@@ -288,7 +340,7 @@ def main(
                 json.dump(info, f)
             np.save(
                 os.path.join(model_dir, 'results', metric + '_preds.npy'),
-                np.vstack([predictions, labels])
+                np.vstack([predictions, labels]),
             )
             if typ == 'best':
                 logger.info(
@@ -326,7 +378,6 @@ if __name__ == '__main__':
     # run the training
     main(
         args.train_affinity_filepath, args.test_affinity_filepath,
-        args.protein_filepath, args.smi_filepath,
-        args.smiles_language_filepath, args.protein_language_filepath,
-        args.model_path, args.params_filepath, args.training_name
+        args.receptor_filepath, args.ligand_filepath, args.model_path,
+        args.params_filepath, args.training_name, args.smiles_language_filepath
     )
