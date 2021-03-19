@@ -6,15 +6,17 @@ import logging
 import os
 import pickle
 import sys
+from copy import deepcopy
 from time import time
+
 import numpy as np
 import torch
-from pytoda.datasets import DrugSensitivityDataset
-from pytoda.smiles.smiles_language import SMILESLanguage
 from paccmann_predictor.models import MODEL_FACTORY
 from paccmann_predictor.utils.hyperparams import OPTIMIZER_FACTORY
 from paccmann_predictor.utils.loss_functions import pearsonr
 from paccmann_predictor.utils.utils import get_device
+from pytoda.datasets import DrugSensitivityDataset
+from pytoda.smiles.smiles_language import SMILESTokenizer
 
 # setup logging
 logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
@@ -43,7 +45,7 @@ parser.add_argument(
 )
 parser.add_argument(
     'smiles_language_filepath', type=str,
-    help='Path to a pickle object a SMILES language object.'
+    help='Path to a folder with SMILES language .json files.'
 )
 parser.add_argument(
     'model_path', type=str,
@@ -83,7 +85,35 @@ def main(
     logger.info("Start data preprocessing...")
 
     # Load SMILES language
-    smiles_language = SMILESLanguage.load(smiles_language_filepath)
+    smiles_language = SMILESTokenizer.from_pretrained(smiles_language_filepath)
+    smiles_language.set_encoding_transforms(
+        add_start_and_stop=params.get('add_start_and_stop', True),
+        padding=params.get('padding', True),
+        padding_length=params.get('smiles_padding_length', None)
+    )
+    test_smiles_language = deepcopy(smiles_language)
+    smiles_language.set_smiles_transforms(
+        augment=params.get('augment_smiles', False),
+        canonical=params.get('smiles_canonical', False),
+        kekulize=params.get('smiles_kekulize', False),
+        all_bonds_explicit=params.get('smiles_bonds_explicit', False),
+        all_hs_explicit=params.get('smiles_all_hs_explicit', False),
+        remove_bonddir=params.get('smiles_remove_bonddir', False),
+        remove_chirality=params.get('smiles_remove_chirality', False),
+        selfies=params.get('selfies', False),
+        sanitize=params.get('selfies', False)
+    )
+    test_smiles_language.set_smiles_transforms(
+        augment=False,
+        canonical=params.get('test_smiles_canonical', True),
+        kekulize=params.get('smiles_kekulize', False),
+        all_bonds_explicit=params.get('smiles_bonds_explicit', False),
+        all_hs_explicit=params.get('smiles_all_hs_explicit', False),
+        remove_bonddir=params.get('smiles_remove_bonddir', False),
+        remove_chirality=params.get('smiles_remove_chirality', False),
+        selfies=params.get('selfies', False),
+        sanitize=params.get('selfies', False)
+    )
 
     # Load the gene list
     with open(gene_filepath, 'rb') as f:
@@ -100,17 +130,6 @@ def main(
         drug_sensitivity_processing_parameters=params.get(
             'drug_sensitivity_processing_parameters', {}
         ),
-        augment=params.get('augment_smiles', True),
-        canonical=params.get('canonical', False),
-        kekulize=params.get('kekulize', False),
-        all_bonds_explicit=params.get('all_bonds_explicit', False),
-        all_hs_explicit=params.get('all_hs_explicit', False),
-        randomize=params.get('randomize', False),
-        remove_bonddir=params.get('remove_bonddir', False),
-        remove_chirality=params.get('remove_chirality', False),
-        selfies=params.get('selfies', False),
-        add_start_and_stop=params.get('smiles_start_stop_token', True),
-        padding_length=params.get('smiles_padding_length', None),
         gene_expression_standardize=params.get(
             'gene_expression_standardize', True
         ),
@@ -119,7 +138,7 @@ def main(
             'gene_expression_processing_parameters', {}
         ),
         device=torch.device(params.get('dataset_device', 'cpu')),
-        backend='eager'
+        iterate_dataset=False
     )
     train_loader = torch.utils.data.DataLoader(
         dataset=train_dataset,
@@ -140,17 +159,6 @@ def main(
             'drug_sensitivity_processing_parameters',
             train_dataset.drug_sensitivity_processing_parameters
         ),
-        augment=params.get('augment_test_smiles', False),
-        canonical=params.get('canonical', False),
-        kekulize=params.get('kekulize', False),
-        all_bonds_explicit=params.get('all_bonds_explicit', False),
-        all_hs_explicit=params.get('all_hs_explicit', False),
-        randomize=params.get('randomize', False),
-        remove_bonddir=params.get('remove_bonddir', False),
-        remove_chirality=params.get('remove_chirality', False),
-        selfies=params.get('selfies', False),
-        add_start_and_stop=params.get('smiles_start_stop_token', True),
-        padding_length=params.get('smiles_padding_length', None),
         gene_expression_standardize=params.get(
             'gene_expression_standardize', True
         ),
@@ -160,7 +168,7 @@ def main(
             train_dataset.gene_expression_dataset.processing
         ),
         device=torch.device(params.get('dataset_device', 'cpu')),
-        backend='eager'
+        iterate_dataset=False
     )
     test_loader = torch.utils.data.DataLoader(
         dataset=test_dataset,
@@ -181,20 +189,24 @@ def main(
     )
     save_top_model = os.path.join(model_dir, 'weights/{}_{}_{}.pt')
     params.update({  # yapf: disable
-        'number_of_genes': len(gene_list),  # yapf: disable
+        'number_of_genes': len(gene_list),
         'smiles_vocabulary_size': smiles_language.number_of_tokens,
         'drug_sensitivity_processing_parameters':
             train_dataset.drug_sensitivity_processing_parameters,
         'gene_expression_processing_parameters':
             train_dataset.gene_expression_dataset.processing
     })
-
-    model = MODEL_FACTORY[params.get('model_fn', 'mca')](params).to(device)
+    model_name = params.get('model_fn', 'paccmann_v2')
+    model = MODEL_FACTORY[model_name](params).to(device)
     model._associate_language(smiles_language)
 
-    if os.path.isfile(os.path.join(model_dir, 'weights', 'best_mse_mca.pt')):
+    if os.path.isfile(
+        os.path.join(model_dir, 'weights', f'best_mse__{model_name}.pt')
+    ):
         logger.info('Found existing model, restoring now...')
-        model.load(os.path.join(model_dir, 'weights', 'mse_best_mca.pt'))
+        model.load(
+            os.path.join(model_dir, 'weights', f'mse_best_{model_name}.pt')
+        )
 
         with open(os.path.join(model_dir, 'results', 'mse.json'), 'r') as f:
             info = json.load(f)
@@ -215,6 +227,7 @@ def main(
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     params.update({'number_of_parameters': num_params})
     logger.info(f'Number of parameters {num_params}')
+    logger.info(model)
 
     # Overwrite params.json file with updated parameters.
     with open(os.path.join(model_dir, 'model_params.json'), 'w') as fp:
@@ -224,9 +237,7 @@ def main(
     logger.info('Training about to start...\n')
     t = time()
 
-    model.save(
-        save_top_model.format('epoch', '0', params.get('model_fn', 'mca'))
-    )
+    model.save(save_top_model.format('epoch', '0', model_name))
 
     for epoch in range(params['epochs']):
 
@@ -287,7 +298,7 @@ def main(
         )
 
         def save(path, metric, typ, val=None):
-            model.save(path.format(typ, metric, params.get('model_fn', 'mca')))
+            model.save(path.format(typ, metric, model_name))
             with open(
                 os.path.join(model_dir, 'results', metric + '.json'), 'w'
             ) as f:
