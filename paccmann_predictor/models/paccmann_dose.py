@@ -129,7 +129,7 @@ class PaccMannDose(PaccMannV2):
             'batch_norm', False
         ) else encodings
 
-        inputs = torch.cat([inputs, dose], axis=1)
+        inputs = torch.cat([inputs, dose], dim=1)
         # Stacking dense layers as a bottleneck
         for dl in self.dense_layers:
             inputs = dl(inputs)
