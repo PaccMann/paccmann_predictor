@@ -276,8 +276,8 @@ def main(
         #)
         #labels = np.array([l.cpu() for label in labels for l in label])
 
-        predictions = np.array([pred_tensor.numpy() for pred_tensor in predictions]).ravel()
-        labels = np.array([label_tensor.numpy() for label_tensor in labels]).ravel()
+        predictions = np.array([pred_tensor.cpu().numpy() for pred_tensor in predictions]).ravel()
+        labels = np.array([label_tensor.cpu().numpy() for label_tensor in labels]).ravel()
         
         test_pearson_a = pearsonr(
             torch.Tensor(predictions), torch.Tensor(labels)
