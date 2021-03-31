@@ -47,10 +47,11 @@
     "gene_attention_size": 1,
     "embed_scale_grad": false,
     "final_activation": true,
-    "batch_size": 64,
+    "batch_size": 256,
     "lr": 0.01,
     "optimizer": "adam",
     "loss_fn": "mse",
-    "epochs": 200,
-    "save_model": 25
+    "epochs": 10,
+    "save_model": 25,
+    "dataset_device": "cpu"
 }
