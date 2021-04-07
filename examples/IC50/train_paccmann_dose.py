@@ -9,6 +9,8 @@ import sys
 from copy import deepcopy
 from time import time
 
+import rdkit
+
 import numpy as np
 import torch
 from paccmann_predictor.models import MODEL_FACTORY
@@ -165,8 +167,8 @@ def main(
     test_loader = torch.utils.data.DataLoader(
         dataset=test_dataset,
         batch_size=params['batch_size'],
-        shuffle=True,
-        drop_last=True,
+        shuffle=False,
+        drop_last=False,
         num_workers=params.get('num_workers', 0)
     )
     logger.info(
@@ -193,7 +195,7 @@ def main(
     model._associate_language(smiles_language)
 
     if os.path.isfile(
-        os.path.join(model_dir, 'weights', f'best_mse__{model_name}.pt')
+        os.path.join(model_dir, 'weights', f'best_mse_{model_name}.pt')
     ):
         logger.info('Found existing model, restoring now...')
         model.load(
