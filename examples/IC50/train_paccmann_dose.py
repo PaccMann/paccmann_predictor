@@ -107,7 +107,7 @@ def main(
     )
     test_smiles_language.set_smiles_transforms(
         augment=False,
-        canonical=params.get('test_smiles_canonical', True),
+        canonical=params.get('test_smiles_canonical', False),
         kekulize=params.get('smiles_kekulize', False),
         all_bonds_explicit=params.get('smiles_bonds_explicit', False),
         all_hs_explicit=params.get('smiles_all_hs_explicit', False),
@@ -151,7 +151,7 @@ def main(
         drug_sensitivity_filepath=test_sensitivity_filepath,
         smi_filepath=smi_filepath,
         gene_expression_filepath=gep_filepath,
-        smiles_language=smiles_language,
+        smiles_language=test_smiles_language,
         gene_list=gene_list,
         gene_expression_standardize=params.get(
             'gene_expression_standardize', True
