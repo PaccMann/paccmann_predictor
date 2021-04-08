@@ -214,7 +214,7 @@ def main(
         f"RMSE: {test_rmse_a:.3f}"
     )
 
-    np.save(predictions_path, predictions)
+    np.save(predictions_filepath, predictions)
 
 if __name__ == '__main__':
     # parse arguments
