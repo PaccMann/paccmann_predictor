@@ -199,15 +199,15 @@ def main(
     ):
         logger.info('Found existing model, restoring now...')
         model.load(
-            os.path.join(model_dir, 'weights', f'mse_best_{model_name}.pt')
+            os.path.join(model_dir, 'weights', f'best_mse_{model_name}.pt')
         )
 
         with open(os.path.join(model_dir, 'results', 'mse.json'), 'r') as f:
             info = json.load(f)
 
-            min_rmse = info['best_rmse']
-            max_pearson = info['best_pearson']
-            min_loss = info['test_loss']
+            min_rmse = float(info['best_rmse'])
+            max_pearson = float(info['best_pearson'])
+            min_loss = float(info['test_loss'])
 
     else:
         min_loss, min_rmse, max_pearson = 100, 1000, 0
@@ -273,17 +273,19 @@ def main(
                 loss = model.loss(y_hat, y.to(device))
                 test_loss += loss.item()
 
-        #predictions = np.array(
-        #    [p.cpu() for preds in predictions for p in preds]
-        #)
-        #labels = np.array([l.cpu() for label in labels for l in label])
 
-        predictions = np.array([pred_tensor.cpu().numpy() for pred_tensor in predictions]).ravel()
-        labels = np.array([label_tensor.cpu().numpy() for label_tensor in labels]).ravel()
-        
+        # torch 1.8.1 version
+        predictions = np.array([p.cpu().numpy() for preds in predictions for p in preds]).ravel()
+        labels = np.array([l.cpu().numpy() for label in labels for l in label]).ravel()
+
+        # torch 1.0.1 version
+        #predictions = np.array([pred_tensor.cpu().numpy() for pred_tensor in predictions]))
+        #labels = np.array([label_tensor.cpu().numpy() for label_tensor in labels]).ravel()
+     
         test_pearson_a = pearsonr(
             torch.Tensor(predictions), torch.Tensor(labels)
         )
+
         test_rmse_a = np.sqrt(np.mean((predictions - labels)**2))
         test_loss_a = test_loss / len(test_loader)
         logger.info(
