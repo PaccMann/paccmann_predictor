@@ -194,8 +194,13 @@ def main(
             loss = model.loss(y_hat, y.to(device))
             test_loss += loss.item()
 
-    predictions = np.array([pred_tensor.cpu().numpy() for pred_tensor in predictions]).ravel()
-    labels = np.array([label_tensor.cpu().numpy() for label_tensor in labels]).ravel()
+    # torch 1.8.1 version
+    predictions = np.array([p.cpu().numpy() for preds in predictions for p in preds]).ravel()
+    labels = np.array([l.cpu().numpy() for label in labels for l in label]).ravel()
+
+    # torch 1.0.1 version
+    #predictions = np.array([pred_tensor.cpu().numpy() for pred_tensor in predictions]))
+    #labels = np.array([label_tensor.cpu().numpy() for label_tensor in labels]).ravel()
         
     test_pearson_a = pearsonr(
         torch.Tensor(predictions), torch.Tensor(labels)
