@@ -184,22 +184,25 @@ def main(
     with torch.no_grad():
         test_loss = 0
         predictions = []
+        gene_attentions = []
         labels = []
         for ind, (smiles, gep, dose, y) in enumerate(test_loader):
             y_hat, pred_dict = model(
                 torch.squeeze(smiles.to(device)), gep.to(device), dose.to(device)
             )
             predictions.append(y_hat)
+            gene_attentions.append(pred_dict['gene_attention'])
             labels.append(y)
             loss = model.loss(y_hat, y.to(device))
             test_loss += loss.item()
 
     # torch 1.8.1 version
     predictions = np.array([p.cpu().numpy() for preds in predictions for p in preds]).ravel()
+    gene_attentions = np.array([a.cpu().numpy() for atts in gene_attentions for a in atts])
     labels = np.array([l.cpu().numpy() for label in labels for l in label]).ravel()
 
     # torch 1.0.1 version
-    #predictions = np.array([pred_tensor.cpu().numpy() for pred_tensor in predictions]))
+    #predictions = np.array([pred_tensor.cpu().numpy() for pred_tensor in predictions])).ravel()
     #labels = np.array([label_tensor.cpu().numpy() for label_tensor in labels]).ravel()
         
     test_pearson_a = pearsonr(
@@ -214,7 +217,8 @@ def main(
         f"RMSE: {test_rmse_a:.3f}"
     )
 
-    np.save(predictions_filepath, predictions)
+    np.save(predictions_filepath+'.npy', predictions)
+    np.save(predictions_filepath+'_gene_attention.npy', gene_attentions)
 
 if __name__ == '__main__':
     # parse arguments
