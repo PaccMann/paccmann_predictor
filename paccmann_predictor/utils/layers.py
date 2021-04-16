@@ -220,10 +220,9 @@ class ContextAttentionLayer(nn.Module):
         Forward pass through a context attention layer
         Arguments:
             reference (torch.Tensor): This is the reference input on which
-                attention is computed.
-                Shape: batch_size x ref_seq_length x ref_hidden_size
+                attention is computed. Shape: bs x ref_seq_length x ref_hidden_size
             context (torch.Tensor): This is the context used for attention.
-                Shape: batch_size x context_seq_length x context_hidden_size
+                Shape: bs x context_seq_length x context_hidden_size
             average_seq (bool): Whether the filtered attention is averaged over the
                 sequence length.
                 NOTE: This is recommended to be True, however if the ref_hidden_size
@@ -232,8 +231,8 @@ class ContextAttentionLayer(nn.Module):
         Returns:
             (output, attention_weights):  A tuple of two Tensors, first one
                 containing the reference filtered by attention (shape:
-                batch_size x ref_hidden_size) and the second one the
-                attention weights (batch_size x ref_seq_length).
+                bs x ref_hidden_size) and the second one the
+                attention weights (bs x ref_seq_length).
                 NOTE: If average_seq is False, the output is: bs x ref_seq_length
         """
         assert len(reference.shape) == 3, 'Reference tensor needs to be 3D'
