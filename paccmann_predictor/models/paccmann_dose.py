@@ -1,10 +1,18 @@
+import logging
+import sys
 from collections import OrderedDict
 
 import torch
 import torch.nn as nn
+from pytoda.smiles.transforms import AugmentTensor
 
+from ..utils.interpret import monte_carlo_dropout, test_time_augmentation
 from ..utils.layers import dense_layer
 from . import PaccMannV2
+
+# setup logging
+logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 
 class PaccMannDose(PaccMannV2):
@@ -89,7 +97,7 @@ class PaccMannDose(PaccMannV2):
             predictions is cell viability tensor of shape `[bs, 1]`.
             prediction_dict includes the prediction and attention weights.
         """
-        gep = torch.unsqueeze(gep, dim=-1)
+        geps = torch.unsqueeze(gep, dim=-1)
         embedded_smiles = self.smiles_embedding(smiles.to(dtype=torch.int64))
 
         # SMILES Convolutions. Unsqueeze has shape bs x 1 x T x H.
@@ -106,7 +114,7 @@ class PaccMannDose(PaccMannV2):
 
                 ind = self.molecule_heads[0] * layer + head
                 e, a = self.molecule_attention_layers[ind](
-                    encoded_smiles[layer], gep
+                    encoded_smiles[layer], geps
                 )
                 encodings.append(e)
                 smiles_alphas.append(a)
@@ -117,7 +125,7 @@ class PaccMannDose(PaccMannV2):
                 ind = self.gene_heads[0] * layer + head
 
                 e, a = self.gene_attention_layers[ind](
-                    gep, encoded_smiles[layer], average_seq=False
+                    geps, encoded_smiles[layer], average_seq=False
                 )
                 encodings.append(e)
                 gene_alphas.append(a)
@@ -150,5 +158,32 @@ class PaccMannDose(PaccMannV2):
                 'smiles_attention': smiles_attention,
                 'viability': predictions
             })  # yapf: disable
+
+            if confidence:
+                augmenter = AugmentTensor(self.smiles_language)
+                epi_conf, epi_pred = monte_carlo_dropout(
+                    self,
+                    regime='tensors',
+                    tensors=(smiles, gep, dose),
+                    repetitions=5
+                )
+                ale_conf, ale_pred = test_time_augmentation(
+                    self,
+                    regime='tensors',
+                    tensors=(smiles, gep, dose),
+                    repetitions=5,
+                    augmenter=augmenter,
+                    tensors_to_augment=0
+                )
+
+                prediction_dict.update({
+                    'epistemic_confidence': epi_conf,
+                    'epistemic_predictions': epi_pred,
+                    'aleatoric_confidence': ale_conf,
+                    'aleatoric_predictions': ale_pred
+                })  # yapf: disable
+
+        elif confidence:
+            logger.info('Using confidence in training mode is not supported.')
 
         return predictions, prediction_dict

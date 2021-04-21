@@ -1,16 +1,22 @@
+import logging
+import sys
 from collections import OrderedDict
 
+import pytoda
 import torch
 import torch.nn as nn
-import pytoda
 from pytoda.smiles.transforms import AugmentTensor
 
 from ..utils.hyperparams import ACTIVATION_FN_FACTORY, LOSS_FN_FACTORY
 from ..utils.interpret import monte_carlo_dropout, test_time_augmentation
 from ..utils.layers import (
-    convolutional_layer, dense_layer, ContextAttentionLayer
+    ContextAttentionLayer, convolutional_layer, dense_layer
 )
 from ..utils.utils import get_device, get_log_molar
+
+# setup logging
+logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 
 class PaccMannV2(nn.Module):
@@ -302,13 +308,13 @@ class PaccMannV2(nn.Module):
 
             if confidence:
                 augmenter = AugmentTensor(self.smiles_language)
-                epistemic_conf = monte_carlo_dropout(
+                epi_conf, epi_pred = monte_carlo_dropout(
                     self,
                     regime='tensors',
                     tensors=(smiles, gep),
                     repetitions=5
                 )
-                aleatoric_conf = test_time_augmentation(
+                ale_conf, ale_pred = test_time_augmentation(
                     self,
                     regime='tensors',
                     tensors=(smiles, gep),
@@ -318,9 +324,14 @@ class PaccMannV2(nn.Module):
                 )
 
                 prediction_dict.update({
-                    'epistemic_confidence': epistemic_conf,
-                    'aleatoric_confidence': aleatoric_conf
+                    'epistemic_confidence': epi_conf,
+                    'epistemic_predictions': epi_pred,
+                    'aleatoric_confidence': ale_conf,
+                    'aleatoric_predictions': ale_pred
                 })  # yapf: disable
+
+        elif confidence:
+            logger.info('Using confidence in training mode is not supported.')
 
         return predictions, prediction_dict
 

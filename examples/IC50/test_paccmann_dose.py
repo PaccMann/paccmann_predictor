@@ -185,13 +185,17 @@ def main(
         test_loss = 0
         predictions = []
         gene_attentions = []
+        epistemic_confs = []
+        aleatoric_confs = []
         labels = []
         for ind, (smiles, gep, dose, y) in enumerate(test_loader):
             y_hat, pred_dict = model(
-                torch.squeeze(smiles.to(device)), gep.to(device), dose.to(device)
+                torch.squeeze(smiles.to(device)), gep.to(device), dose.to(device), confidence = True
             )
             predictions.append(y_hat)
             gene_attentions.append(pred_dict['gene_attention'])
+            epistemic_confs.append(pred_dict['epistemic_confidence'])
+            aleatoric_confs.append(pred_dict['aleatoric_confidence'])
             labels.append(y)
             loss = model.loss(y_hat, y.to(device))
             test_loss += loss.item()
@@ -200,6 +204,8 @@ def main(
     predictions = np.array([p.cpu().numpy() for preds in predictions for p in preds]).ravel()
     gene_attentions = np.array([a.cpu().numpy() for atts in gene_attentions for a in atts])
     labels = np.array([l.cpu().numpy() for label in labels for l in label]).ravel()
+    epistemic_confs = np.array([c.cpu().numpy() for conf in epistemic_confs for c in conf]).ravel()
+    aleatoric_confs = np.array([c.cpu().numpy() for conf in aleatoric_confs for c in conf]).ravel()
 
     # torch 1.0.1 version
     #predictions = np.array([pred_tensor.cpu().numpy() for pred_tensor in predictions])).ravel()
@@ -219,6 +225,8 @@ def main(
 
     np.save(predictions_filepath+'.npy', predictions)
     np.save(predictions_filepath+'_gene_attention.npy', gene_attentions)
+    np.save(predictions_filepath+'_epistemic_confidence.npy', epistemic_confs)
+    np.save(predictions_filepath+'_aleatoric_confidence.npy', aleatoric_confs)
 
 if __name__ == '__main__':
     # parse arguments
