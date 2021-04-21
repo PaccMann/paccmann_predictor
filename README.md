@@ -90,4 +90,17 @@ If you use `paccmann_predictor` in your projects, please cite the following:
   doi = {10.1021/acs.molpharmaceut.9b00520},
   note = {PMID: 31618586}
 }
+
+@article{born2021datadriven,
+  author = {Born, Jannis and Manica, Matteo and Cadow, Joris and Markert, Greta and Mill, Nil Adell and Filipavicius, Modestas and Janakarajan, Nikita and Cardinale, Antonio and Laino, Teodoro and {Rodr{\'{i}}guez Mart{\'{i}}nez}, Mar{\'{i}}a},
+  doi = {10.1088/2632-2153/abe808},
+  issn = {2632-2153},
+  journal = {Machine Learning: Science and Technology},
+  number = {2},
+  pages = {025024},
+  title = {{Data-driven molecular design for discovery and synthesis of novel ligands: a case study on SARS-CoV-2}},
+  url = {https://iopscience.iop.org/article/10.1088/2632-2153/abe808},
+  volume = {2},
+  year = {2021}
+}
 ```
