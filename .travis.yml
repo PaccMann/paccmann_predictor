@@ -1,4 +1,7 @@
 dist: trusty
+branches:
+  only:
+    - master
 services:
   - docker
 before_script:
