@@ -263,13 +263,12 @@ def main(
             labels = []
             for ind, (smiles, gep, dose, y) in enumerate(test_loader):
                 y_hat, pred_dict = model(
-                    torch.squeeze(smiles.to(device)), gep.to(device), dose.to(device), confidence = True
+                    torch.squeeze(smiles.to(device)), gep.to(device), dose.to(device)
                 )
                 predictions.append(y_hat)
                 labels.append(y)
                 loss = model.loss(y_hat, y.to(device))
                 test_loss += loss.item()
-                print(pred_dict.keys())
 
 
         # torch 1.8.1 version
