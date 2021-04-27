@@ -78,18 +78,17 @@ def knn(
 
             def get_mol_dist(train_drug):
                 if train_drug in tani_dict[drug_name].keys():
-                    mol_dists[test_idx] = tani_dict[drug_name][train_drug]
+                    return tani_dict[drug_name][train_drug]
                 else:
-                    d = flipper(
+                    tani_dict[drug_name][train_drug] = flipper(
                         DataStructs.FingerprintSimilarity(fp, drug_fp_dict[train_drug])
                     )
-                    tani_dict[drug_name][train_drug] = d
-                    mol_dists[test_idx] = d
+                    return tani_dict[drug_name][train_drug]
 
         else:
 
             def get_mol_dist(train_drug):
-                mol_dists[test_idx] = tani_dict[drug_name][train_drug]
+                return tani_dict[drug_name][train_drug]
 
         new_cell = False
         if cell_name not in omic_dict.keys():
@@ -98,27 +97,25 @@ def knn(
 
         if new_cell:
 
-            def get_cell_dist(s):
-                if s['cell_line'] in omic_dict[cell_name].keys():
-                    cell_dists[test_idx] = omic_dict[cell_name][s['cell_line']]
+            def get_cell_dist(train_cell_name):
+
+                if train_cell_name in omic_dict[cell_name].keys():
+                    return omic_dict[cell_name][train_cell_name]
                 else:
-                    d = np.linalg.norm(
-                        cell_profile - cell_df.loc[s['cell_line']].values
+                    omic_dict[cell_name][train_cell_name] = np.linalg.norm(
+                        cell_profile - cell_df.loc[train_cell_name].values
                     )
-                    omic_dict[cell_name][s['cell_line']] = d
-                    cell_dists[test_idx] = d
+                    return omic_dict[cell_name][train_cell_name]
 
         else:
 
-            def get_cell_dist(s):
-                cell_dists[test_idx] = omic_dict[cell_name][s['cell_line']]
+            def get_cell_dist(train_cell_name):
+                return omic_dict[cell_name][train_cell_name]
 
         mol_dists, cell_dists = np.zeros((len(train_df),)), np.zeros((len(train_df),))
-        for test_idx_loc, train_sample in train_df.iterrows():
-            test_idx = train_df.index.get_loc(test_idx_loc)
 
-            get_mol_dist(train_sample['drug'])
-            get_cell_dist(train_sample)
+        mol_dists = np.array(list(map(get_mol_dist, train_df['drug'].values)))
+        cell_dists = np.array(list(map(get_cell_dist, train_df['cell_line'].values)))
 
         # Normalize cell distances
         cell_dists = cell_dists / np.max(cell_dists)
