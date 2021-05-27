@@ -8,7 +8,7 @@ import sys
 from time import time
 
 import numpy as np
-from paccmann_predictor.models import knn
+from paccmann_predictor.models.knn_dose import knn_dose
 from scipy.stats import pearsonr
 
 import pandas as pd
@@ -58,12 +58,12 @@ def main(
 	shared_genes = list(set(gene_list) & set(cell_df.columns))
 	cell_df = cell_df[shared_genes]
 
-	predictions = knn(train_df, test_df, drug_df, cell_df)
+	predictions = knn_dose(train_df, test_df, drug_df, cell_df)
 
 	pearson = pearsonr(predictions, test_df.label.values)
 	print('Pearson R =', pearson)
 	np.save(result_path, predictions)
-	
+
 
 if __name__ == '__main__':
     # parse arguments

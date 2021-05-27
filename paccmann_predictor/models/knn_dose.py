@@ -7,7 +7,7 @@ from rdkit.Chem import AllChem
 from tqdm import tqdm
 
 
-def knn(
+def knn_dose(
     train_df: pd.DataFrame,
     test_df: pd.DataFrame,
     drug_df: pd.DataFrame,
