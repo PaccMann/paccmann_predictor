@@ -48,21 +48,22 @@ def main(
     smi_filepath, gene_filepath, result_path
 ):
 
-	train_df = pd.read_csv(train_sensitivity_filepath).rename(columns = {'viability': 'label'})
-	test_df = pd.read_csv(test_sensitivity_filepath).rename(columns = {'viability': 'label'})
-	drug_df = pd.read_csv(smi_filepath, header=None, index_col = 1, names = ['SMILES'], sep = '\t')
-	# Load the gene list
-	with open(gene_filepath, 'rb') as f:
-		gene_list = pickle.load(f)
-	cell_df = pd.read_csv(gep_filepath, index_col = 0)
-	shared_genes = list(set(gene_list) & set(cell_df.columns))
-	cell_df = cell_df[shared_genes]
+    train_df = pd.read_csv(train_sensitivity_filepath, index_col = 0).rename(columns = {'viability': 'label'})
+    test_df = pd.read_csv(test_sensitivity_filepath, index_col = 0).rename(columns = {'viability': 'label'})
+    drug_df = pd.read_csv(smi_filepath, header=None, index_col = 1, names = ['SMILES'], sep = '\t')
 
-	predictions = knn_dose(train_df, test_df, drug_df, cell_df)
+    # Load the gene list
+    with open(gene_filepath, 'rb') as f:
+        gene_list = pickle.load(f)
+    cell_df = pd.read_csv(gep_filepath, index_col = 0)
+    shared_genes = list(set(gene_list) & set(cell_df.columns))
+    cell_df = cell_df[shared_genes]
 
-	pearson = pearsonr(predictions, test_df.label.values)
-	print('Pearson R =', pearson)
-	np.save(result_path, predictions)
+    predictions = knn_dose(train_df, test_df, drug_df, cell_df)
+
+    pearson = pearsonr(predictions, test_df.label.values)
+    print('Pearson R =', pearson)
+    np.save(result_path, predictions)
 
 
 if __name__ == '__main__':
