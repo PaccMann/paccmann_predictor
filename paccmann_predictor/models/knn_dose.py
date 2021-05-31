@@ -6,6 +6,8 @@ from rdkit import Chem, DataStructs
 from rdkit.Chem import AllChem
 from tqdm import tqdm
 
+import time
+
 
 def knn_dose(
     train_df: pd.DataFrame,
@@ -51,95 +53,74 @@ def knn_dose(
             ],
         )
     )
-    # Will store computed distances to avoid re-computation
-    tani_dict = {}
-    omic_dict = {}
 
-    predictions, knn_labels, drugs, cells = [], [], [], []
+
+    predictions, knn_labels = [], []
     flipper = lambda x: x * -1 + 1
-    for idx_loc, test_sample in tqdm(test_df.iterrows()):
 
-        idx = test_df.index.get_loc(idx_loc)
+    start = time.time()
+    # Compute all pairwise drug distances
+    test_drugs = test_df.drug.unique()
+    train_drugs = train_df.drug.unique()
+    drug_dist_arr = np.zeros((len(train_drugs), len(test_drugs)))
+    for i, test_drug in enumerate(test_drugs):
+        fp = drug_fp_dict[test_drug]
+        for j, train_drug in enumerate(train_drugs):
+            if test_drug != train_drug: 
+                drug_dist_arr[j,i]= flipper(
+                            DataStructs.FingerprintSimilarity(fp, drug_fp_dict[train_drug])
+                        )
 
-        if verbose and idx % 10 == 0:
-            print(f'Idx {idx}/{len(test_df)}')
 
-        cell_name = test_sample['cell_line']
-        drug_name = test_sample['drug']
-        fp = drug_fp_dict[drug_name]
-        cell_profile = cell_df.loc[cell_name].values
+    drug_dist_arr = pd.DataFrame(drug_dist_arr, columns = test_drugs, index = train_drugs)
+    tani_dict_time = time.time()
+    print("drug_dist time =", tani_dict_time - start)
 
-        new_mol = False
-        if drug_name not in tani_dict.keys():
-            tani_dict[drug_name] = {}
-            new_mol = True
-
-        if new_mol:
-
-            def get_mol_dist(train_drug):
-                if train_drug in tani_dict[drug_name].keys():
-                    return tani_dict[drug_name][train_drug]
-                else:
-                    tani_dict[drug_name][train_drug] = flipper(
-                        DataStructs.FingerprintSimilarity(fp, drug_fp_dict[train_drug])
+    # Compute all pairwise cell line distances
+    test_cell_lines = test_df.cell_line.unique()
+    train_cell_lines = train_df.cell_line.unique()
+    omics_dist_arr = np.zeros((len(train_cell_lines), len(test_cell_lines)))
+    for i, test_cell_line in enumerate(test_cell_lines):
+        for j, train_cell_line in enumerate(train_cell_lines):
+            omics_dist_arr[j, i] = np.linalg.norm(
+                        cell_df.loc[test_cell_line].values - cell_df.loc[train_cell_line].values
                     )
-                    return tani_dict[drug_name][train_drug]
 
-        else:
+    omics_dist_arr = pd.DataFrame(omics_dist_arr, columns = test_cell_lines, index = train_cell_lines)
+    omic_dict_time = time.time()
+    print("omics_dist time =", omic_dict_time - tani_dict_time)
 
-            def get_mol_dist(train_drug):
-                return tani_dict[drug_name][train_drug]
 
-        new_cell = False
-        if cell_name not in omic_dict.keys():
-            omic_dict[cell_name] = {}
-            new_cell = True
+    for drug_name, drug_rows in test_df.groupby('drug'):
+        drug_start = time.time()
+        drug_dist_df = drug_dist_arr[drug_name].to_frame()
+        drug_dist_df['drug'] = drug_dist_df.index
+        drug_dists = train_df.merge(drug_dist_df, on = 'drug', how = 'left')[drug_name].values
+        for cell_name, cell_rows in drug_rows.groupby('cell_line'):
+            cell_start = time.time()
+            cell_dist_df = omics_dist_arr[cell_name].to_frame()
+            cell_dist_df['cell_line'] = cell_dist_df.index
+            cell_dists = train_df.merge(cell_dist_df, on = 'cell_line', how = 'left')[cell_name].values
+            # Normalize cell distances
+            cell_dists = cell_dists / np.max(cell_dists)
+            for idx_loc, test_sample in tqdm(cell_rows.iterrows()):
+                idx = test_df.index.get_loc(idx_loc)
 
-        if new_cell:
+                if verbose and idx % 10 == 0:
+                    print(f'Idx {idx}/{len(test_df)}')
 
-            def get_cell_dist(train_cell_name):
+                dose_dists = np.abs(test_sample['dose'] - train_df['dose'].values)
+                
+                # Normalize dose distances
+                dose_dists = dose_dists / np.max(dose_dists)
 
-                if train_cell_name in omic_dict[cell_name].keys():
-                    return omic_dict[cell_name][train_cell_name]
-                else:
-                    omic_dict[cell_name][train_cell_name] = np.linalg.norm(
-                        cell_profile - cell_df.loc[train_cell_name].values
-                    )
-                    return omic_dict[cell_name][train_cell_name]
-
-        else:
-
-            def get_cell_dist(train_cell_name):
-                return omic_dict[cell_name][train_cell_name]
-
-        mol_dists, cell_dists = np.zeros((len(train_df),)), np.zeros((len(train_df),))
-
-        mol_dists = np.array(list(map(get_mol_dist, train_df['drug'].values)))
-        cell_dists = np.array(list(map(get_cell_dist, train_df['cell_line'].values)))
-        dose_dists = np.abs(test_df['dose'] - train_df['dose'].values)
-
-        # Normalize cell distances
-        cell_dists = cell_dists / np.max(cell_dists)
-        # Normalize dose distances
-        dose_dists = dose_dists / np.max(dose_dists)
-
-        knns = np.argsort(mol_dists + cell_dists + dose_dists)[:k]
-        _knn_labels = np.array(train_df['label'])[knns]
-        predictions.append(np.mean(_knn_labels))
-        knn_labels.append(_knn_labels)
-        drugs.append(drug_name)
-        cells.append(cell_name)
-
-        if result_path is not None and idx % 10 == 0:
-            df = pd.DataFrame(knn_labels)
-            df.insert(0, 'cell', cells)
-            df.insert(0, 'drug', drugs)
-            df.to_csv(os.path.join(result_path, f'knn_{idx}.csv'))
-
-    if result_path is not None:
-        df = pd.DataFrame(knn_labels)
-        df.insert(0, 'cell', cells)
-        df.insert(0, 'drug', drugs)
-        df.to_csv(os.path.join(result_path, f'knn_{idx}.csv'))
+                knns = np.argsort(drug_dists + cell_dists + dose_dists)[:k]
+                _knn_labels = np.array(train_df['label'])[knns]
+                predictions.append(np.mean(_knn_labels))
+                knn_labels.append(_knn_labels)
+            cell_end = time.time()
+            print('Time per cell line =', cell_end-cell_start)   
+        drug_end = time.time()
+        print('Time per drug =', drug_end-drug_start)
 
     return (predictions, knn_labels) if return_knn_labels else predictions
