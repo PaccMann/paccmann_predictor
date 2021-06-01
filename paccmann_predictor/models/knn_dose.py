@@ -57,7 +57,7 @@ def knn_dose(
 
     logger = logging.getLogger('knn_logger')
 
-    predictions, knn_labels = [], []
+    predictions, indices = [], []
     flipper = lambda x: x * -1 + 1
 
     start = time.time()
@@ -87,6 +87,10 @@ def knn_dose(
                         cell_df.loc[test_cell_line].values - cell_df.loc[train_cell_line].values
                     )
 
+    # Normalize cell distances
+    max_dists = np.amax(omics_dist_arr, 1)[:, np.newaxis]
+    omics_dist_arr = (omics_dist_arr / max_dists)
+
     omics_dist_arr = pd.DataFrame(omics_dist_arr, columns = test_cell_lines, index = train_cell_lines)
     omics_dist_time = time.time()
     logger.info(f"omics_dist time = {omics_dist_time - drug_dist_time}")
@@ -97,17 +101,17 @@ def knn_dose(
         drug_dist_df = drug_dist_arr[drug_name].to_frame()
         drug_dists = train_df.set_index('drug').join(drug_dist_df, how = 'left')[drug_name].values
 
+        drug_predictions = []
+        drug_indices = []
         for cell_name, cell_rows in drug_rows.groupby('cell_line'):
-            cell_start = time.time()
+            #cell_start = time.time()
             cell_dist_df = omics_dist_arr[cell_name].to_frame()
             cell_dists = train_df.join(cell_dist_df, how = 'left')[cell_name].values
-            # Normalize cell distances
-            cell_dists = cell_dists / np.max(cell_dists)
 
             dose_dists = abs(cell_rows.dose.values[:, np.newaxis] - train_df.dose.values)
             # Normalize dose distances
-            max_doses = np.amax(dose_dists, 1)[:, np.newaxis]
-            dose_dists = (dose_dists / max_doses)
+            max_dists = np.amax(dose_dists, 1)[:, np.newaxis]
+            dose_dists = (dose_dists / max_dists)
 
             dists = (dose_dists + drug_dists + cell_dists)
 
@@ -118,15 +122,21 @@ def knn_dose(
                 knns = np.argpartition(dists, k).transpose()[:k]
                 _knn_labels = np.array(train_df['label'])[knns]
                 _knn_labels = np.mean(_knn_labels, axis=0)
-            
-            predictions += _knn_labels.tolist()
 
-            pearson = pearsonr(_knn_labels, cell_rows.label.values)
-            logger.info(f'Pearson R = {pearson}')
+            drug_predictions += _knn_labels.tolist()
+            drug_indices += cell_rows.index.tolist()
+            predictions += drug_predictions
+            indices += drug_indices
+
+            #pearson = pearsonr(_knn_labels, cell_rows.label.values)
+            #logger.info(f'Pearson R = {pearson}')
           
-            cell_end = time.time()
-            logger.info(f'Time per cell line = {cell_end-cell_start}')
+            #cell_end = time.time()
+            #logger.info(f'Time per cell line = {cell_end-cell_start}')
+
+        pearson = pearsonr(drug_predictions, drug_rows.loc[drug_indices].label.values)
+        logger.info(f'Pearson R = {pearson}')
         drug_end = time.time()
         logger.info(f'Time per drug, all cell lines = {drug_end-drug_start}')
 
-    return (predictions, knn_labels) if return_knn_labels else predictions
+    return (predictions, indices)

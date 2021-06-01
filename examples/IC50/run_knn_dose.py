@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Run KNN dose predictor."""
 import argparse
-import logging
 import os
 import pickle
 import sys
@@ -12,9 +11,6 @@ from paccmann_predictor.models.knn_dose import knn_dose
 from scipy.stats import pearsonr
 
 import pandas as pd
-
-# setup logging
-logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 
 # yapf: disable
 parser = argparse.ArgumentParser()
@@ -59,9 +55,9 @@ def main(
     shared_genes = list(set(gene_list) & set(cell_df.columns))
     cell_df = cell_df[shared_genes]
 
-    predictions = knn_dose(train_df, test_df, drug_df, cell_df)
+    predictions, indices = knn_dose(train_df, test_df, drug_df, cell_df)
 
-    pearson = pearsonr(predictions, test_df.label.values)
+    pearson = pearsonr(predictions, test_df.loc[indices].label.values)
     print('Pearson R =', pearson)
     np.save(result_path, predictions)
 
