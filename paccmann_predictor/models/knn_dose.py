@@ -15,7 +15,7 @@ def knn_dose(
     test_df: pd.DataFrame,
     drug_df: pd.DataFrame,
     cell_df: pd.DataFrame,
-    k: int = 1,
+    k: int = 3,
     return_knn_labels: bool = False,
     verbose: bool = False,
     result_path: str = None,
@@ -115,7 +115,7 @@ def knn_dose(
                 knns = np.argmin(dists, axis = 1)
                 _knn_labels = np.array(train_df['label'])[knns]
             else: 
-                knns = np.argsort(dists).transpose()[:k]
+                knns = np.argpartition(dists, k).transpose()[:k]
                 _knn_labels = np.array(train_df['label'])[knns]
                 _knn_labels = np.mean(_knn_labels, axis=0)
             
@@ -124,8 +124,8 @@ def knn_dose(
             pearson = pearsonr(_knn_labels, cell_rows.label.values)
             logger.info(f'Pearson R = {pearson}')
           
-            #cell_end = time.time()
-            #logger.info(f'Time per cell line = {cell_end-cell_start}')
+            cell_end = time.time()
+            logger.info(f'Time per cell line = {cell_end-cell_start}')
         drug_end = time.time()
         logger.info(f'Time per drug, all cell lines = {drug_end-drug_start}')
 
