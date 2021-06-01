@@ -5,9 +5,10 @@ import pandas as pd
 from rdkit import Chem, DataStructs
 from rdkit.Chem import AllChem
 from tqdm import tqdm
+import logging
 
 import time
-
+from scipy.stats import pearsonr
 
 def knn_dose(
     train_df: pd.DataFrame,
@@ -54,6 +55,7 @@ def knn_dose(
         )
     )
 
+    logger = logging.getLogger('knn_logger')
 
     predictions, knn_labels = [], []
     flipper = lambda x: x * -1 + 1
@@ -71,10 +73,9 @@ def knn_dose(
                             DataStructs.FingerprintSimilarity(fp, drug_fp_dict[train_drug])
                         )
 
-
     drug_dist_arr = pd.DataFrame(drug_dist_arr, columns = test_drugs, index = train_drugs)
-    tani_dict_time = time.time()
-    print("drug_dist time =", tani_dict_time - start)
+    drug_dist_time = time.time()
+    logger.info(f"drug_dist time = {drug_dist_time - start}")
 
     # Compute all pairwise cell line distances
     test_cell_lines = test_df.cell_line.unique()
@@ -87,40 +88,45 @@ def knn_dose(
                     )
 
     omics_dist_arr = pd.DataFrame(omics_dist_arr, columns = test_cell_lines, index = train_cell_lines)
-    omic_dict_time = time.time()
-    print("omics_dist time =", omic_dict_time - tani_dict_time)
+    omics_dist_time = time.time()
+    logger.info(f"omics_dist time = {omics_dist_time - drug_dist_time}")
 
-
+    train_df.set_index('cell_line', inplace=True)
     for drug_name, drug_rows in test_df.groupby('drug'):
         drug_start = time.time()
         drug_dist_df = drug_dist_arr[drug_name].to_frame()
-        drug_dist_df['drug'] = drug_dist_df.index
-        drug_dists = train_df.merge(drug_dist_df, on = 'drug', how = 'left')[drug_name].values
+        drug_dists = train_df.set_index('drug').join(drug_dist_df, how = 'left')[drug_name].values
+
         for cell_name, cell_rows in drug_rows.groupby('cell_line'):
             cell_start = time.time()
             cell_dist_df = omics_dist_arr[cell_name].to_frame()
-            cell_dist_df['cell_line'] = cell_dist_df.index
-            cell_dists = train_df.merge(cell_dist_df, on = 'cell_line', how = 'left')[cell_name].values
+            cell_dists = train_df.join(cell_dist_df, how = 'left')[cell_name].values
             # Normalize cell distances
             cell_dists = cell_dists / np.max(cell_dists)
-            for idx_loc, test_sample in tqdm(cell_rows.iterrows()):
-                idx = test_df.index.get_loc(idx_loc)
 
-                if verbose and idx % 10 == 0:
-                    print(f'Idx {idx}/{len(test_df)}')
+            dose_dists = abs(cell_rows.dose.values[:, np.newaxis] - train_df.dose.values)
+            # Normalize dose distances
+            max_doses = np.amax(dose_dists, 1)[:, np.newaxis]
+            dose_dists = (dose_dists / max_doses)
 
-                dose_dists = np.abs(test_sample['dose'] - train_df['dose'].values)
-                
-                # Normalize dose distances
-                dose_dists = dose_dists / np.max(dose_dists)
+            dists = (dose_dists + drug_dists + cell_dists)
 
-                knns = np.argsort(drug_dists + cell_dists + dose_dists)[:k]
+            if k == 1: 
+                knns = np.argmin(dists, axis = 1)
                 _knn_labels = np.array(train_df['label'])[knns]
-                predictions.append(np.mean(_knn_labels))
-                knn_labels.append(_knn_labels)
-            cell_end = time.time()
-            print('Time per cell line =', cell_end-cell_start)   
+            else: 
+                knns = np.argsort(dists).transpose()[:k]
+                _knn_labels = np.array(train_df['label'])[knns]
+                _knn_labels = np.mean(_knn_labels, axis=0)
+            
+            predictions += _knn_labels.tolist()
+
+            pearson = pearsonr(_knn_labels, cell_rows.label.values)
+            logger.info(f'Pearson R = {pearson}')
+          
+            #cell_end = time.time()
+            #logger.info(f'Time per cell line = {cell_end-cell_start}')
         drug_end = time.time()
-        print('Time per drug =', drug_end-drug_start)
+        logger.info(f'Time per drug, all cell lines = {drug_end-drug_start}')
 
     return (predictions, knn_labels) if return_knn_labels else predictions
