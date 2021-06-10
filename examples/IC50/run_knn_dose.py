@@ -59,7 +59,8 @@ def main(
 
     pearson = pearsonr(predictions, test_df.loc[indices].label.values)
     print('Pearson R =', pearson)
-    np.save(result_path, predictions)
+    np.save(result_path + '_predictions.npy', predictions)
+    np.save(result_path + '_indices.npy', indices)
 
 
 if __name__ == '__main__':
