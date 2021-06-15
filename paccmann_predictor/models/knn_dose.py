@@ -80,10 +80,10 @@ def knn_dose(
     # Compute all pairwise cell line distances
     test_cell_lines = test_df.cell_line.unique()
     train_cell_lines = train_df.cell_line.unique()
-    omics_dist_arr = np.zeros((len(train_cell_lines), len(test_cell_lines)))
+    omics_dist_arr = np.zeros((len(test_cell_lines), len(train_cell_lines)))
     for i, test_cell_line in enumerate(test_cell_lines):
         for j, train_cell_line in enumerate(train_cell_lines):
-            omics_dist_arr[j, i] = np.linalg.norm(
+            omics_dist_arr[i, j] = np.linalg.norm(
                         cell_df.loc[test_cell_line].values - cell_df.loc[train_cell_line].values
                     )
 
@@ -91,22 +91,26 @@ def knn_dose(
     max_dists = np.amax(omics_dist_arr, 1)[:, np.newaxis]
     omics_dist_arr = (omics_dist_arr / max_dists)
 
-    omics_dist_arr = pd.DataFrame(omics_dist_arr, columns = test_cell_lines, index = train_cell_lines)
+    omics_dist_arr = pd.DataFrame(omics_dist_arr.transpose(), columns = test_cell_lines, index = train_cell_lines)
     omics_dist_time = time.time()
     logger.info(f"omics_dist time = {omics_dist_time - drug_dist_time}")
 
-    train_df.set_index('cell_line', inplace=True)
     for drug_name, drug_rows in test_df.groupby('drug'):
+        if drug_name != 1: continue
+
         drug_start = time.time()
         drug_dist_df = drug_dist_arr[drug_name].to_frame()
-        drug_dists = train_df.set_index('drug').join(drug_dist_df, how = 'left')[drug_name].values
+        drug_dist_df['drug'] = drug_dist_df.index
+        drug_dists = train_df.merge(drug_dist_df, how = 'left', on = 'drug', sort = False)[drug_name].values
 
         drug_predictions = []
         drug_indices = []
         for cell_name, cell_rows in drug_rows.groupby('cell_line'):
+            if cell_name != 'GDSC.cosmic.684055': continue
             #cell_start = time.time()
             cell_dist_df = omics_dist_arr[cell_name].to_frame()
-            cell_dists = train_df.join(cell_dist_df, how = 'left')[cell_name].values
+            cell_dist_df['cell_line'] = cell_dist_df.index
+            cell_dists = train_df.merge(cell_dist_df, how = 'left', on = 'cell_line', sort = False)[cell_name].values
 
             dose_dists = abs(cell_rows.dose.values[:, np.newaxis] - train_df.dose.values)
             # Normalize dose distances
@@ -123,8 +127,7 @@ def knn_dose(
             drug_predictions += _knn_labels.tolist()
             #drug_predictions.append(_knn_labels)
             drug_indices += cell_rows.index.tolist()
-    
-
+   
             #pearson = pearsonr(_knn_labels, cell_rows.label.values)
             #logger.info(f'Pearson R = {pearson}')
           
