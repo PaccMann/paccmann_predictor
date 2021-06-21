@@ -6,11 +6,34 @@ import pickle
 import sys
 from time import time
 
+import rdkit
+
 import numpy as np
 from paccmann_predictor.models.knn_dose import knn_dose
 from scipy.stats import pearsonr
 
 import pandas as pd
+
+def _handle_zeros_in_scale(scale, copy=True):
+    """
+    This method is copied `from sklearn.preprocessing._data`
+    Makes sure that whenever scale is zero, we handle it correctly.
+    This happens in most scalers when we have constant features.
+    """
+    # if we are fitting on 1D arrays, scale might be a scalar
+    if np.isscalar(scale):
+        if scale == 0.0:
+            scale = 1.0
+        return scale
+    elif isinstance(scale, np.ndarray):
+        if copy:
+            # New array to avoid side-effects
+            scale = scale.copy()
+        scale[scale == 0.0] = 1.0
+        return scale
+
+def transform_standardize(data, mean, std):
+    return (data - mean) / _handle_zeros_in_scale(std, copy=False)
 
 # yapf: disable
 parser = argparse.ArgumentParser()
@@ -54,6 +77,7 @@ def main(
     cell_df = pd.read_csv(gep_filepath, index_col = 0)
     shared_genes = list(set(gene_list) & set(cell_df.columns))
     cell_df = cell_df[shared_genes]
+    cell_df = transform_standardize(cell_df, cell_df.mean(), cell_df.std().values)
 
     predictions, indices = knn_dose(train_df, test_df, drug_df, cell_df)
 
