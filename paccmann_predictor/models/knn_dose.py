@@ -92,12 +92,11 @@ def knn_dose(
     omics_dist_arr = (omics_dist_arr / max_dists)
 
     omics_dist_arr = pd.DataFrame(omics_dist_arr.transpose(), columns = test_cell_lines, index = train_cell_lines)
+    omics_dist_arr = omics_dist_arr.fillna(0)
     omics_dist_time = time.time()
     logger.info(f"omics_dist time = {omics_dist_time - drug_dist_time}")
 
     for drug_name, drug_rows in test_df.groupby('drug'):
-        if drug_name != 1: continue
-
         drug_start = time.time()
         drug_dist_df = drug_dist_arr[drug_name].to_frame()
         drug_dist_df['drug'] = drug_dist_df.index
@@ -106,7 +105,6 @@ def knn_dose(
         drug_predictions = []
         drug_indices = []
         for cell_name, cell_rows in drug_rows.groupby('cell_line'):
-            if cell_name != 'GDSC.cosmic.684055': continue
             #cell_start = time.time()
             cell_dist_df = omics_dist_arr[cell_name].to_frame()
             cell_dist_df['cell_line'] = cell_dist_df.index
@@ -125,7 +123,7 @@ def knn_dose(
             _knn_labels = np.mean(_knn_labels, axis=0)
 
             drug_predictions += _knn_labels.tolist()
-            #drug_predictions.append(_knn_labels)
+            #drug_predictions += [_knn_labels] * cell_rows.shape[0]
             drug_indices += cell_rows.index.tolist()
    
             #pearson = pearsonr(_knn_labels, cell_rows.label.values)
