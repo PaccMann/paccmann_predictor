@@ -1,17 +1,23 @@
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Build Status](https://travis-ci.org/PaccMann/paccmann_predictor.svg?branch=master)](https://travis-ci.org/PaccMann/paccmann_predictor)
+
 # paccmann_predictor
 
-PyTorch implementation of PaccMann.
+Drug interaction prediction with PaccMann.
 
-IC50 prediction using drug properties and tissue-specific cell line (gene expression profiles).
+`paccmann_predictor` is a package for drug interaction prediction, with examples of 
+anticancer drug sensitivity prediction and drug target affinity prediction. Please see our papers:
 
-`paccmann_predictor` is a package for drug sensitivity prediction and is the core component of the repo.
+- [_Toward explainable anticancer compound sensitivity prediction via multimodal attention-based convolutional encoders_](https://doi.org/10.1021/acs.molpharmaceut.9b00520) (*Molecular Pharmaceutics*, 2019). This is the original paper on IC50 prediction using drug properties and tissue-specific cell line information (gene expression profiles). While the original code was written in `tensorflow` and is available [here](https://github.com/drugilsberg/paccmann), this is the `pytorch` implementation of the best PaccMann architecture (multiscale convolutional encoder).
+
+- [Data-driven molecular design for discovery and synthesis of novel ligands: a case study on SARS-CoV-2](https://iopscience.iop.org/article/10.1088/2632-2153/abe808) (_Machine Learning: Science and Technology_, 2021). In there, we propose a slightly modified version to predict drug-target binding affinities based on protein sequences and SMILES
+
 
 *NOTE*: PaccMann acronyms "Prediction of AntiCancer Compound sensitivity with Multi-modal Attention-based Neural Networks".
 
-*NOTE*: This repo contains the `pytorch` implementation of our best model architecture (a multiscale convolutional attentive SMILES encoder).
+**PaccMann for affinity prediction:**
+![Graphical abstract](https://github.com/PaccMann/paccmann_predictor/blob/master/assets/paccmann.png "Graphical abstract")
 
-*NOTE*: For details, please see our [paper](https://doi.org/10.1021/acs.molpharmaceut.9b00520) in *Molecular Pharmaceutics*.
 
 ## Requirements
 
