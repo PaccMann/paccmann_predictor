@@ -1,0 +1,20 @@
+{
+    "augment_smiles": true,
+    "smiles_canonical": false,
+    "smiles_test_canonical": true,
+    "ligand_start_stop_token": true,
+    "receptor_start_stop_token": true,
+    "temperature": 1.3,
+    "ligand_padding_length": 1024,
+    "receptor_padding_length": 7080,
+    "dense_hidden_sizes": [
+        512
+    ],
+    "activation_fn": "relu",
+    "dropout": 0.5,
+    "batch_norm": true,
+    "batch_size": 128,
+    "lr": 0.0005,
+    "epochs": 200,
+    "save_model": 50
+}
