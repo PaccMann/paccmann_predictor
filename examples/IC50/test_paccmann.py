@@ -7,18 +7,17 @@ import os
 import pickle
 import sys
 from copy import deepcopy
-from time import time
-
-import rdkit
 
 import numpy as np
+import pandas as pd
 import torch
+from tqdm import tqdm
 from paccmann_predictor.models import MODEL_FACTORY
 from paccmann_predictor.utils.hyperparams import OPTIMIZER_FACTORY
-from paccmann_predictor.utils.loss_functions import pearsonr
 from paccmann_predictor.utils.utils import get_device
 from pytoda.datasets import DrugSensitivityDataset
 from pytoda.smiles.smiles_language import SMILESTokenizer
+from scipy.stats import pearsonr
 
 # setup logging
 logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
@@ -112,12 +111,13 @@ def main(
         gene_list = pickle.load(f)
 
     # Assemble test dataset
-    test_dataset = DrugSensitivityDoseDataset(
+    test_dataset = DrugSensitivityDataset(
         drug_sensitivity_filepath=test_sensitivity_filepath,
         smi_filepath=smi_filepath,
         gene_expression_filepath=gep_filepath,
         smiles_language=test_smiles_language,
         gene_list=gene_list,
+        drug_sensitivity_min_max=params.get('drug_sensitivity_min_max', True),
         gene_expression_standardize=params.get(
             'gene_expression_standardize', True
         ),
@@ -136,7 +136,7 @@ def main(
         num_workers=params.get('num_workers', 0)
     )
     logger.info(
-        f'Test dataset has {len(test_dataset)} samples.'
+        f'Test dataset has {len(test_dataset)} samples with {len(test_loader)} batches'
     )
 
     device = get_device()
@@ -145,24 +145,14 @@ def main(
         f'model is {device}'
     )
 
-    params.update({  # yapf: disable
-        'number_of_genes': len(gene_list),
-        'smiles_vocabulary_size': smiles_language.number_of_tokens,
-        'drug_sensitivity_processing_parameters':
-            test_dataset.drug_sensitivity_processing_parameters,
-        'gene_expression_processing_parameters':
-            test_dataset.gene_expression_dataset.processing
-    })
-
     model_name = params.get('model_fn', 'paccmann')
     model = MODEL_FACTORY[model_name](params).to(device)
     model._associate_language(smiles_language)
-
-    if os.path.isfile(model_filepath):
-        logger.info('Found existing model, restoring now...')
-        model.load(model_filepath)
-    else:
-        logger.error('Model not found.')
+    try:
+        logger.info(f'Attempting to restore model from {model_filepath}...')
+        model.load(model_filepath, map_location=device)
+    except Exception:
+        raise ValueError(f'Error in restoring model from {model_filepath}!')
 
     # Define optimizer
     optimizer = (
@@ -173,57 +163,45 @@ def main(
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     params.update({'number_of_parameters': num_params})
     logger.info(f'Number of parameters {num_params}')
-    logger.info(model)
-
 
     # Start testing
-    logger.info('Testing about to start...\n')
-    t = time()
+    logger.info('Testing about to start... \n')
     model.eval()
 
     with torch.no_grad():
         test_loss = 0
         predictions = []
-        gene_attentions = []
-        epistemic_confs = []
-        aleatoric_confs = []
+        # gene_attentions = []
+        # epistemic_confs = []
+        # aleatoric_confs = []
         labels = []
-        for ind, (smiles, gep, y) in enumerate(test_loader):
+        for ind, (smiles, gep, y) in tqdm(enumerate(test_loader)):
             y_hat, pred_dict = model(
                 torch.squeeze(smiles.to(device)), gep.to(device), confidence = False
             )
-            predictions.append(y_hat)
-            #gene_attentions.append(pred_dict['gene_attention'])
-            #epistemic_confs.append(pred_dict['epistemic_confidence'])
-            #aleatoric_confs.append(pred_dict['aleatoric_confidence'])
-            labels.append(y)
+            predictions.extend(list(y_hat.detach().cpu().squeeze().numpy()))
+            # gene_attentions.append(pred_dict['gene_attention'])
+            # epistemic_confs.append(pred_dict['epistemic_confidence'])
+            # aleatoric_confs.append(pred_dict['aleatoric_confidence'])
+            labels.extend(list(y.detach().cpu().squeeze().numpy()))
             loss = model.loss(y_hat, y.to(device))
             test_loss += loss.item()
 
-    # torch 1.8.1 version
-    predictions = np.array([p.cpu().numpy() for preds in predictions for p in preds]).ravel()
     #gene_attentions = np.array([a.cpu().numpy() for atts in gene_attentions for a in atts])
-    labels = np.array([l.cpu().numpy() for label in labels for l in label]).ravel()
     #epistemic_confs = np.array([c.cpu().numpy() for conf in epistemic_confs for c in conf]).ravel()
     #aleatoric_confs = np.array([c.cpu().numpy() for conf in aleatoric_confs for c in conf]).ravel()
-
-    # torch 1.0.1 version
-    #predictions = np.array([pred_tensor.cpu().numpy() for pred_tensor in predictions])).ravel()
-    #labels = np.array([label_tensor.cpu().numpy() for label_tensor in labels]).ravel()
         
-    #test_pearson_a = pearsonr(
-    #    torch.Tensor(predictions), torch.Tensor(labels)
-    #)
-    #test_rmse_a = np.sqrt(np.mean((predictions - labels)**2))
-    #test_loss_a = test_loss / len(test_loader)
+    pearson = pearsonr(predictions, labels)
+    rmse = np.sqrt(np.mean((predictions - labels)**2))
+    loss = test_loss / len(test_loader)
     logger.info(
-        f"\t **** TESTING DONE****, "
-        #f"loss: {test_loss_a:.5f}, "
-        #f"Pearson: {test_pearson_a:.3f}, "
-        #f"RMSE: {test_rmse_a:.3f}"
+        f"\t**RESULT**\t loss:{loss:.5f}, Pearson: {pearson:.3f}, RMSE: {rmse:.3f}"
     )
 
-    np.save(predictions_filepath+'.npy', predictions)
+    df = test_dataset.drug_sensitivity_df
+    df['prediction'] = predictions
+    df.to_csv(predictions_filepath)
+
     #np.save(predictions_filepath+'_gene_attention.npy', gene_attentions)
     #np.save(predictions_filepath+'_epistemic_confidence.npy', epistemic_confs)
     #np.save(predictions_filepath+'_aleatoric_confidence.npy', aleatoric_confs)
