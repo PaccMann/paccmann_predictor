@@ -190,8 +190,10 @@ def main(
     #gene_attentions = np.array([a.cpu().numpy() for atts in gene_attentions for a in atts])
     #epistemic_confs = np.array([c.cpu().numpy() for conf in epistemic_confs for c in conf]).ravel()
     #aleatoric_confs = np.array([c.cpu().numpy() for conf in aleatoric_confs for c in conf]).ravel()
-        
-    pearson = pearsonr(predictions, labels)
+    predictions = np.array(predictions)
+    labels = np.array(labels)
+
+    pearson = pearsonr(predictions, labels)[0]
     rmse = np.sqrt(np.mean((predictions - labels)**2))
     loss = test_loss / len(test_loader)
     logger.info(
@@ -200,7 +202,7 @@ def main(
 
     df = test_dataset.drug_sensitivity_df
     df['prediction'] = predictions
-    df.to_csv(predictions_filepath)
+    df.to_csv(predictions_filepath+'.csv')
 
     #np.save(predictions_filepath+'_gene_attention.npy', gene_attentions)
     #np.save(predictions_filepath+'_epistemic_confidence.npy', epistemic_confs)
