@@ -86,7 +86,7 @@ If you use `paccmann_predictor` in your projects, please cite the following:
 ```bib
 @article{manica2019paccmann,
   title={Toward explainable anticancer compound sensitivity prediction via multimodal attention-based convolutional encoders},
-  author={Manica, Matteo and Oskooei, Ali and Born, Jannis and Subramanian, Vigneshwari and S{\'a}ez-Rodr{\'\i}guez, Julio and Rodríguez Martínez, María},
+  author={Manica, Matteo and Oskooei, Ali and Born, Jannis and Subramanian, Vigneshwari and S{\'a}ez-Rodr{\'\i}guez, Julio and Mart{\'\i}nez, Mar{\'\i}a Rodr{\'\i}guez},
   journal={Molecular pharmaceutics},
   volume={16},
   number={12},
