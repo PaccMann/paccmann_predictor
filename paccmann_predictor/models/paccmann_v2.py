@@ -10,8 +10,7 @@ from pytoda.smiles.transforms import AugmentTensor
 from ..utils.hyperparams import ACTIVATION_FN_FACTORY, LOSS_FN_FACTORY
 from ..utils.interpret import monte_carlo_dropout, test_time_augmentation
 from ..utils.layers import (
-    ContextAttentionLayer, convolutional_layer, dense_attention_layer,
-    dense_layer
+    ContextAttentionLayer, convolutional_layer, dense_layer
 )
 from ..utils.utils import get_device, get_log_molar
 
@@ -20,12 +19,11 @@ logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 
-class MCA(nn.Module):
-    """Multiscale Convolutional Attentive Encoder.
-
-    This is the MCA model as presented in the authors publication in
-    Molecular Pharmaceutics:
+class PaccMannV2(nn.Module):
+    """Based on the MCA model in Molecular Pharmaceutics:
         https://pubs.acs.org/doi/10.1021/acs.molpharmaceut.9b00520.
+        Updates:
+            - Context instead of self attention on omic data
     """
 
     def __init__(self, params, *args, **kwargs):
@@ -37,9 +35,9 @@ class MCA(nn.Module):
                 TODO params should become actual arguments (use **params).
 
         Items in params:
+            smiles_padding_length (int): Padding length for SMILES.
             smiles_embedding_size (int): dimension of tokens' embedding.
             smiles_vocabulary_size (int): size of the tokens vocabulary.
-
             activation_fn (string, optional): Activation function used in all
                 layers for specification in ACTIVATION_FN_FACTORY.
                 Defaults to 'relu'.
@@ -48,9 +46,9 @@ class MCA(nn.Module):
             dropout (float, optional): Dropout probability in all
                 except parametric layer. Defaults to 0.5.
             filters (list[int], optional): Numbers of filters to learn per
-                convolutional layer. Defaults to [64, 64, 64].
+                SMILES convolutional layer. Defaults to [64, 64, 64].
             kernel_sizes (list[list[int]], optional): Sizes of kernels per
-                convolutional layer. Defaults to  [
+                SMILES convolutional layer. Defaults to  [
                     [3, params['smiles_embedding_size']],
                     [5, params['smiles_embedding_size']],
                     [11, params['smiles_embedding_size']]
@@ -59,31 +57,16 @@ class MCA(nn.Module):
                 smiles_embedding_size, so if the latter is 8, the images are
                 t x 8, then treat the 8 embedding dimensions like channels
                 in an RGB image.
-            multiheads (list[int], optional): Amount of attentive multiheads
+            molecule_heads (list[int], optional): Amount of attentive molecule_heads
                 per SMILES embedding. Should have len(filters)+1.
                 Defaults to [4, 4, 4, 4].
             stacked_dense_hidden_sizes (list[int], optional): Sizes of the
                 hidden dense layers. Defaults to [1024, 512].
             smiles_attention_size (int, optional): size of the attentive layer
                 for the smiles sequence. Defaults to 64.
-            temperature (float, optional): Softmax temperature parameter for
-                gene attention (0, inf).
-
-        Example params:
-        ```
-        {
-            "smiles_attention_size": 8,
-            "smiles_vocabulary_size": 28,
-            "smiles_embedding_size": 8,
-            "filters": [128, 128],
-            "kernel_sizes": [[3, 8], [5, 8]],
-            "multiheads":[32, 32, 32]
-            "stacked_dense_hidden_sizes": [512, 64, 16]
-        }
-        ```
     """
 
-        super(MCA, self).__init__(*args, **kwargs)
+        super(PaccMannV2, self).__init__(*args, **kwargs)
 
         # Model Parameter
         self.device = get_device()
@@ -101,22 +84,32 @@ class MCA(nn.Module):
             ]['parameters']['min']  # yapf: disable
 
         # Model inputs
+        self.smiles_padding_length = params['smiles_padding_length']
         self.number_of_genes = params.get('number_of_genes', 2128)
         self.smiles_attention_size = params.get('smiles_attention_size', 64)
+        self.gene_attention_size = params.get('gene_attention_size', 1)
+        self.molecule_temperature = params.get('molecule_temperature', 1.)
+        self.gene_temperature = params.get('gene_temperature', 1.)
 
         # Model architecture (hyperparameter)
-        self.multiheads = params.get('multiheads', [4, 4, 4, 4])
+        self.molecule_heads = params.get('molecule_heads', [4, 4, 4, 4])
+        self.gene_heads = params.get('gene_heads', [2, 2, 2, 2])
+        if len(self.gene_heads) != len(self.molecule_heads):
+            raise ValueError('Length of gene and molecule_heads do not match.')
+
         self.filters = params.get('filters', [64, 64, 64])
+
         self.hidden_sizes = (
             [
-                self.multiheads[0] * params['smiles_embedding_size'] + sum(
-                    [h * f for h, f in zip(self.multiheads[1:], self.filters)]
-                )
+                self.molecule_heads[0] * params['smiles_embedding_size'] + sum(
+                    [
+                        h * f
+                        for h, f in zip(self.molecule_heads[1:], self.filters)
+                    ]
+                ) + sum(self.gene_heads) * self.number_of_genes
             ] + params.get('stacked_dense_hidden_sizes', [1024, 512])
         )
 
-        if params.get('gene_to_dense', False):  # Optional skip connection
-            self.hidden_sizes[0] += self.number_of_genes
         self.dropout = params.get('dropout', 0.5)
         self.temperature = params.get('temperature', 1.)
         self.act_fn = ACTIVATION_FN_FACTORY[
@@ -132,7 +125,7 @@ class MCA(nn.Module):
             raise ValueError(
                 'Length of filter and kernel size lists do not match.'
             )
-        if len(self.filters) + 1 != len(self.multiheads):
+        if len(self.filters) + 1 != len(self.molecule_heads):
             raise ValueError(
                 'Length of filter and multihead lists do not match'
             )
@@ -143,11 +136,6 @@ class MCA(nn.Module):
             self.params['smiles_embedding_size'],
             scale_grad_by_freq=params.get('embed_scale_grad', False)
         )
-        self.gene_attention_layer = dense_attention_layer(
-            self.number_of_genes,
-            temperature=self.temperature,
-            dropout=self.dropout
-        ).to(self.device)
 
         self.convolutional_layers = nn.Sequential(
             OrderedDict(
@@ -169,20 +157,41 @@ class MCA(nn.Module):
 
         smiles_hidden_sizes = [params['smiles_embedding_size']] + self.filters
 
-        self.context_attention_layers = nn.Sequential(OrderedDict([
+        self.molecule_attention_layers = nn.Sequential(OrderedDict([
             (
-                f'context_attention_{layer}_head_{head}',
+                f'molecule_attention_{layer}_head_{head}',
                 ContextAttentionLayer(
-                    smiles_hidden_sizes[layer],
-                    42,  # Can be anything since context is only 1D (omic)
-                    self.number_of_genes,
+                    reference_hidden_size=smiles_hidden_sizes[layer],
+                    reference_sequence_length=self.smiles_padding_length,
+                    context_hidden_size=1,
+                    context_sequence_length=self.number_of_genes,
                     attention_size=self.smiles_attention_size,
                     individual_nonlinearity=params.get(
                         'context_nonlinearity', nn.Sequential()
-                    )
+                    ),
+                    temperature=self.molecule_temperature
                 )
-            ) for layer in range(len(self.multiheads))
-            for head in range(self.multiheads[layer])
+            ) for layer in range(len(self.molecule_heads))
+            for head in range(self.molecule_heads[layer])
+            ]))  # yapf: disable
+
+        # Gene attention stream
+        self.gene_attention_layers = nn.Sequential(OrderedDict([
+            (
+                f'gene_attention_{layer}_head_{head}',
+                ContextAttentionLayer(
+                    reference_hidden_size=1,
+                    reference_sequence_length=self.number_of_genes,
+                    context_hidden_size=smiles_hidden_sizes[layer],
+                    context_sequence_length=self.smiles_padding_length,
+                    attention_size=self.gene_attention_size,
+                    individual_nonlinearity=params.get(
+                        'context_nonlinearity', nn.Sequential()
+                    ),
+                    temperature=self.gene_temperature
+                )
+            ) for layer in range(len(self.molecule_heads))
+            for head in range(self.gene_heads[layer])
             ]))  # yapf: disable
 
         # Only applied if params['batch_norm'] = True
@@ -217,50 +226,54 @@ class MCA(nn.Module):
         )
 
     def forward(self, smiles, gep, confidence=False):
-        """Forward pass through the MCA.
+        """Forward pass through the PaccMannV2.
 
         Args:
-            smiles (torch.Tensor): of type int and shape `[bs, seq_length]`.
-            gep (torch.Tensor): of shape `[bs, num_genes]`.
+            smiles (torch.Tensor): of type int and shape: [bs, smiles_padding_length]
+            gep (torch.Tensor): of shape `[bs, number_of_genes]`.
             confidence (bool, optional) whether the confidence estimates are
                 performed.
 
         Returns:
-            (torch.Tensor, torch.Tensor): predictions, prediction_dict
-
+            (torch.Tensor, dict): predictions, prediction_dict
             predictions is IC50 drug sensitivity prediction of shape `[bs, 1]`.
             prediction_dict includes the prediction and attention weights.
         """
+
+        gep = torch.unsqueeze(gep, dim=-1)
         embedded_smiles = self.smiles_embedding(smiles.to(dtype=torch.int64))
 
-        # Gene attention weights
-        gene_alphas = self.gene_attention_layer(gep)
-
-        # Filter the gene expression with the weights.
-        encoded_genes = gene_alphas * gep
-
-        # NOTE: SMILES Convolutions. Unsqueeze has shape bs x 1 x T x H.
+        # SMILES Convolutions. Unsqueeze has shape bs x 1 x T x H.
         encoded_smiles = [embedded_smiles] + [
             self.convolutional_layers[ind]
             (torch.unsqueeze(embedded_smiles, 1)).permute(0, 2, 1)
             for ind in range(len(self.convolutional_layers))
         ]
 
-        # NOTE: SMILES Attention mechanism
-        encodings, smiles_alphas = [], []
-        context = torch.unsqueeze(encoded_genes, 1)
-        for layer in range(len(self.multiheads)):
-            for head in range(self.multiheads[layer]):
-                ind = self.multiheads[0] * layer + head
-                e, a = self.context_attention_layers[ind](
-                    encoded_smiles[layer], context
+        # Molecule context attention
+        encodings, smiles_alphas, gene_alphas = [], [], []
+        for layer in range(len(self.molecule_heads)):
+            for head in range(self.molecule_heads[layer]):
+
+                ind = self.molecule_heads[0] * layer + head
+                e, a = self.molecule_attention_layers[ind](
+                    encoded_smiles[layer], gep
                 )
                 encodings.append(e)
                 smiles_alphas.append(a)
 
+        # Gene context attention
+        for layer in range(len(self.gene_heads)):
+            for head in range(self.gene_heads[layer]):
+                ind = self.gene_heads[0] * layer + head
+
+                e, a = self.gene_attention_layers[ind](
+                    gep, encoded_smiles[layer], average_seq=False
+                )
+                encodings.append(e)
+                gene_alphas.append(a)
+
         encodings = torch.cat(encodings, dim=1)
-        if self.params.get('gene_to_dense', False):
-            encodings = torch.cat([encodings, gep], dim=1)
 
         # Apply batch normalization if specified
         inputs = self.batch_norm(encodings) if self.params.get(
@@ -271,20 +284,19 @@ class MCA(nn.Module):
             inputs = dl(inputs)
 
         predictions = self.final_dense(inputs)
-
         prediction_dict = {}
 
         if not self.training:
             # The below is to ease postprocessing
-            smiles_attention_weights = torch.mean(
-                torch.cat(
-                    [torch.unsqueeze(p, -1) for p in smiles_alphas], dim=-1
-                ),
-                dim=-1
+            smiles_attention = torch.cat(
+                [torch.unsqueeze(p, -1) for p in smiles_alphas], dim=-1
+            )
+            gene_attention = torch.cat(
+                [torch.unsqueeze(p, -1) for p in gene_alphas], dim=-1
             )
             prediction_dict.update({
-                'gene_attention': gene_alphas,
-                'smiles_attention': smiles_attention_weights,
+                'gene_attention': gene_attention,
+                'smiles_attention': smiles_attention,
                 'IC50': predictions,
                 'log_micromolar_IC50':
                     get_log_molar(

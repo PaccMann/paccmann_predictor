@@ -19,8 +19,7 @@ def dense_layer(
                 (
                     'batch_norm',
                     nn.BatchNorm1d(hidden_size)
-                    if batch_norm
-                    else nn.Identity(),
+                    if batch_norm else nn.Identity(),
                 ),
                 ('act_fn', act_fn),
                 ('dropout', nn.Dropout(p=dropout)),
@@ -30,7 +29,9 @@ def dense_layer(
 
 
 def dense_attention_layer(
-    number_of_features: int, temperature: float = 1.0, dropout=0.0
+    number_of_features: int,
+    temperature: float = 1.0,
+    dropout=0.0
 ) -> nn.Sequential:
     """Attention mechanism layer for dense inputs.
 
@@ -84,7 +85,8 @@ def convolutional_layer(
                         input_channels,  # channel_in
                         num_kernel,  # channel_out
                         kernel_size,  # kernel_size
-                        padding=[kernel_size[0] // 2, 0],  # pad for valid conv.
+                        padding=[kernel_size[0] // 2,
+                                 0],  # pad for valid conv.
                     ),
                 ),
                 ('squeeze', Squeeze()),
@@ -92,7 +94,8 @@ def convolutional_layer(
                 ('dropout', nn.Dropout(p=dropout)),
                 (
                     'batch_norm',
-                    nn.BatchNorm1d(num_kernel) if batch_norm else nn.Identity(),
+                    nn.BatchNorm1d(num_kernel)
+                    if batch_norm else nn.Identity(),
                 ),
             ]
         )
@@ -207,20 +210,30 @@ class ContextAttentionLayer(nn.Module):
             )
         )
 
-    def forward(self, reference: torch.Tensor, context: torch.Tensor):
+    def forward(
+        self,
+        reference: torch.Tensor,
+        context: torch.Tensor,
+        average_seq: bool = True
+    ):
         """
         Forward pass through a context attention layer
         Arguments:
             reference (torch.Tensor): This is the reference input on which
-                attention is computed.
-                Shape: batch_size x ref_seq_length x ref_hidden_size
+                attention is computed. Shape: bs x ref_seq_length x ref_hidden_size
             context (torch.Tensor): This is the context used for attention.
-                Shape: batch_size x context_seq_length x context_hidden_size
+                Shape: bs x context_seq_length x context_hidden_size
+            average_seq (bool): Whether the filtered attention is averaged over the
+                sequence length.
+                NOTE: This is recommended to be True, however if the ref_hidden_size
+                is 1, this can be used to prevent collapsing to a single float.
+                Defaults to True.
         Returns:
             (output, attention_weights):  A tuple of two Tensors, first one
                 containing the reference filtered by attention (shape:
-                batch_size x context_hidden_size x 1) and the second one the
-                attention weights (batch_size x context_sequence_length x 1).
+                bs x ref_hidden_size) and the second one the
+                attention weights (bs x ref_seq_length).
+                NOTE: If average_seq is False, the output is: bs x ref_seq_length
         """
         assert len(reference.shape) == 3, 'Reference tensor needs to be 3D'
         assert len(context.shape) == 3, 'Context tensor needs to be 3D'
@@ -232,7 +245,9 @@ class ContextAttentionLayer(nn.Module):
         alphas = self.alpha_projection(
             torch.tanh(reference_attention + context_attention)
         )
-        output = torch.sum(reference * torch.unsqueeze(alphas, -1), 1)
+
+        output = reference * torch.unsqueeze(alphas, -1)
+        output = torch.sum(output, 1) if average_seq else torch.squeeze(output)
 
         return output, alphas
 

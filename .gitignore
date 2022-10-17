@@ -118,3 +118,6 @@ ENV/
 
 # trained models
 /models
+
+# IDE
+.vscode/

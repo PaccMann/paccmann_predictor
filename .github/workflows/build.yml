@@ -57,7 +57,6 @@ jobs:
       - name: IC50 - Install dependencies and run tests
         run: |
           python3 -m pip install --upgrade pip
-          pip3 install --no-cache-dir -r examples/IC50/requirements.txt
           pip3 install --no-deps .
           python3 -c "import paccmann_predictor"
           python3 examples/IC50/train_paccmann.py -h
