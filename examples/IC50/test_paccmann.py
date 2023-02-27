@@ -13,7 +13,6 @@ import pandas as pd
 import torch
 from tqdm import tqdm
 from paccmann_predictor.models import MODEL_FACTORY
-from paccmann_predictor.utils.hyperparams import OPTIMIZER_FACTORY
 from paccmann_predictor.utils.utils import get_device
 from pytoda.datasets import DrugSensitivityDataset
 from pytoda.smiles.smiles_language import SMILESTokenizer
@@ -154,12 +153,6 @@ def main(
     except Exception:
         raise ValueError(f'Error in restoring model from {model_filepath}!')
 
-    # Define optimizer
-    optimizer = (
-        OPTIMIZER_FACTORY[params.get('optimizer', 'Adam')]
-        (model.parameters(), lr=params.get('lr', 0.01))
-    )
-
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     params.update({'number_of_parameters': num_params})
     logger.info(f'Number of parameters {num_params}')
@@ -175,7 +168,7 @@ def main(
         # epistemic_confs = []
         # aleatoric_confs = []
         labels = []
-        for ind, (smiles, gep, y) in tqdm(enumerate(test_loader)):
+        for ind, (smiles, gep, y) in tqdm(enumerate(test_loader), total=len(test_loader)):
             y_hat, pred_dict = model(
                 torch.squeeze(smiles.to(device)), gep.to(device), confidence = False
             )

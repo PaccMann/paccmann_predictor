@@ -30,7 +30,11 @@ pip install -e .
 First, please consider using our public [PaccMann webservice](https://ibm.biz/paccmann-aas) as described in the [NAR paper](https://academic.oup.com/nar/article/48/W1/W502/5836770).
 
 To use our pretrained model, please download the model from: https://ibm.biz/paccmann-data (just download `models/single_pytorch_model`).
-For example, assuming that you downloaded this model in a directory called `single_pytorch_model`, the data from https://ibm.box.com/v/paccmann-pytoda-data in folders `data` and `splitted_data` the following command should work:
+For example, assuming that you:
+1. Set up your conda environment as described above;
+2. Downloaded the model linked above in a directory called `single_pytorch_model` and
+3. Downloaded the data from https://ibm.box.com/v/paccmann-pytoda-data in folders `data` and `splitted_data`;
+then, the following command should work:
 ```console
 (paccmann_predictor) $ python examples/IC50/test_paccmann.py \
 splitted_data/gdsc_cell_line_ic50_test_fraction_0.1_id_997_seed_42.csv \
