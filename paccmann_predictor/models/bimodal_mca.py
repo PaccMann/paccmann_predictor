@@ -247,6 +247,8 @@ class BimodalMCA(nn.Module):
             self.final_dense = nn.Sequential(
                 self.final_dense, ACTIVATION_FN_FACTORY['sigmoid']
             )
+        # Cast model
+        self.to(self.device)
 
     def forward(self, smiles, proteins, confidence=False):
         """Forward pass through the biomodal MCA.
