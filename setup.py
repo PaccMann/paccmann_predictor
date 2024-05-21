@@ -31,7 +31,15 @@ setup(
         'ali.oskooei@gmail.com, jab@zurich.ibm.com, '
         'drugilsberg@gmail.com, joriscadow@gmail.com'
     ),
-    install_requires=['numpy', 'scipy', 'torch>=1.0.0'],
+    install_requires=[
+        'numpy', 
+        'scipy',
+        'torch>=1.0.0',
+        'pandas',
+        'tqdm',
+        'rdkit',
+        'pytoda>=1.1.5',
+    ],
     packages=find_packages('.'),
     zip_safe=False,
 )
