@@ -66,6 +66,11 @@ jobs:
           use-only-tar-bz2: true  # This needs to be set for proper caching
           auto-update-conda: true  # Required for windows for `use-only-tar-bz2`
 
+      - name: Install dependencies and test code 
+        run: |
+          pip3 install -e .
+          python3 -c "import paccmann_predictor.models"
+
       - name: Affinity - Install dependencies and run tests
         run: |
           python3 -m pip install --upgrade pip
