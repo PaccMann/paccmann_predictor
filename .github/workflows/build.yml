@@ -13,9 +13,6 @@ jobs:
           - os: ubuntu-20.04
             pip_cache_path: ~/.cache/pip
             experimental: false
-          - os: macos-13
-            pip_cache_path: ~/Library/Caches/pip
-            experimental: false
     defaults:
       run:
         shell: bash -l {0}  # For conda
