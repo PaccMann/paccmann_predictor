@@ -10,7 +10,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-20.04
+          - os: ubuntu-latest
             pip_cache_path: ~/.cache/pip
             experimental: false
     defaults:
@@ -21,22 +21,22 @@ jobs:
       # have not changed
       CACHE_NUMBER: 0
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Checkout and setup python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v5
         with:
           python-version: '3.10'
           architecture: 'x64'
 
       - name: Cache conda
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
-          path: ~/conda_pkgs_dir  # from: conda-incubator/setup-miniconda@v2
+          path: ~/conda_pkgs_dir
           key: ${{ runner.os }}-conda-${{ env.CACHE_NUMBER }}-${{
             hashFiles('conda.yml') }}
 
       - name: Cache pip
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: ${{ matrix.pip_cache_path }}
           key: ${{ runner.os }}-pip--${{ env.CACHE_NUMBER }}-${{
