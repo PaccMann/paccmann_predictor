@@ -48,7 +48,7 @@ class Squeeze(nn.Module):
     """Squeeze wrapper for nn.Sequential."""
 
     def forward(self, data):
-        return torch.squeeze(data)
+        return torch.squeeze(data, -1)
 
 
 class Unsqueeze(nn.Module):
